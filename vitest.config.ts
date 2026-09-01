@@ -1,13 +1,15 @@
 import { defineConfig } from 'vitest/config';
-import tsconfigPaths from 'vite-tsconfig-paths';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  // Resolves the path aliases declared in tsconfig.json, including the ones
-  // added by `nest g library`.
-  plugins: [tsconfigPaths()],
+  plugins: [react()],
+  // Resolves the `@/*` path alias declared in tsconfig.json.
+  resolve: { tsconfigPaths: true },
   test: {
     globals: true,
-    root: './',
-    include: ['**/*.spec.ts'],
+    environment: 'jsdom',
+    setupFiles: ['./vitest.setup.ts'],
+    include: ['**/*.spec.{ts,tsx}'],
+    exclude: ['node_modules', '.next'],
   },
 });
