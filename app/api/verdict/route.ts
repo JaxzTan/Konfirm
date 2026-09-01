@@ -211,7 +211,7 @@ export async function POST(req: NextRequest) {
 
   const locale: Locale = ["en", "bm", "zh"].includes(language) ? language : "en";
   const responses = mockResponses[locale];
-  const lowerText = text.toLowerCase();
+  const lowerText = String(text ?? "").toLowerCase();
 
   if (lowerText.includes("true")) return NextResponse.json(responses.true);
   if (lowerText.includes("degrad") || lowerText.includes("partial")) return NextResponse.json(responses.degraded);
