@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     "Paste a message, link, or screenshot. Konfirm cross-checks it with 3 AI models and records the verdict on-chain so anyone can verify it independently.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: JSX.Element | JSX.Element[] }) {
   return (
     <html
       lang="en"
