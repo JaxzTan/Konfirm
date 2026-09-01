@@ -30,9 +30,14 @@ export default function ShareButtons({
         // user cancelled — do nothing
       }
     } else {
-      await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      try {
+        await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        // clipboard unavailable — fall back to opening the URL so the user can copy/share manually
+        window.open(shareUrl, "_blank", "noopener,noreferrer");
+      }
     }
   };
 
