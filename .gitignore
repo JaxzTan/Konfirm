@@ -1,9 +1,13 @@
 node_modules/
-dist/
+.next/
+out/
+build/
 *.tsbuildinfo
+next-env.d.ts
 coverage/
 .env
 .env.local
 *.log
 .DS_Store
-move/build/*
+AGENTS.md
+CLAUDE.md

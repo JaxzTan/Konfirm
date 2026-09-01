@@ -2,11 +2,11 @@
 
 ## 1. Branch Structure
 
-| Branch | Purpose | Who can push | Deploys to |
-|---|---|---|---|
-| `main` | Final / release. Always deployable, tagged per release. | Nobody directly — PR from `dev` only | Production |
-| `dev` | Stable integration branch. All finished work lands here first. | Nobody directly — PR from feature branches | Staging |
-| `feature/*` | One branch per person, per piece of work. | The owner of the branch | — |
+| Branch      | Purpose                                                        | Who can push                               | Deploys to |
+| ----------- | -------------------------------------------------------------- | ------------------------------------------ | ---------- |
+| `main`      | Final / release. Always deployable, tagged per release.        | Nobody directly — PR from `dev` only       | Production |
+| `dev`       | Stable integration branch. All finished work lands here first. | Nobody directly — PR from feature branches | Staging    |
+| `feature/*` | One branch per person, per piece of work.                      | The owner of the branch                    | —          |
 
 **Rule:** `main` and `dev` are protected. No direct commits, no force-push, ever.
 
@@ -16,14 +16,14 @@
 <type>/<short-kebab-description>
 ```
 
-| Type | Use for |
-|---|---|
-| `feature/` | New functionality |
-| `fix/` | Bug fix on `dev` |
-| `hotfix/` | Urgent fix branched from `main` |
+| Type        | Use for                                 |
+| ----------- | --------------------------------------- |
+| `feature/`  | New functionality                       |
+| `fix/`      | Bug fix on `dev`                        |
+| `hotfix/`   | Urgent fix branched from `main`         |
 | `refactor/` | Code restructuring, no behaviour change |
-| `chore/` | Config, deps, CI, tooling |
-| `docs/` | Documentation only |
+| `chore/`    | Config, deps, CI, tooling               |
+| `docs/`     | Documentation only                      |
 
 Examples:
 
@@ -36,6 +36,7 @@ chore/upgrade-go-1-24
 ```
 
 Rules:
+
 - Lowercase, kebab-case, no spaces or underscores.
 - Keep it under ~40 characters.
 - If you use an issue tracker, prefix the number: `feature/42-user-authentication`.
@@ -88,19 +89,19 @@ Every commit message starts with a **keyword (type)**. Format:
 
 ### Allowed keywords
 
-| Keyword | Meaning |
-|---|---|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `refactor` | Restructure without changing behaviour |
-| `perf` | Performance improvement |
-| `test` | Adding or fixing tests |
-| `docs` | Documentation only |
-| `style` | Formatting, whitespace, linting — no logic change |
-| `chore` | Build, deps, tooling, CI config |
-| `build` | Build system or external dependency changes |
-| `ci` | CI/CD pipeline changes |
-| `revert` | Reverting a previous commit |
+| Keyword    | Meaning                                           |
+| ---------- | ------------------------------------------------- |
+| `feat`     | New feature                                       |
+| `fix`      | Bug fix                                           |
+| `refactor` | Restructure without changing behaviour            |
+| `perf`     | Performance improvement                           |
+| `test`     | Adding or fixing tests                            |
+| `docs`     | Documentation only                                |
+| `style`    | Formatting, whitespace, linting — no logic change |
+| `chore`    | Build, deps, tooling, CI config                   |
+| `build`    | Build system or external dependency changes       |
+| `ci`       | CI/CD pipeline changes                            |
+| `revert`   | Reverting a previous commit                       |
 
 ### Subject line rules
 
@@ -112,6 +113,7 @@ Every commit message starts with a **keyword (type)**. Format:
 ### Examples
 
 Good:
+
 ```
 feat(auth): add JWT refresh token endpoint
 fix(ws): prevent reconnect loop on server restart
@@ -121,6 +123,7 @@ docs(readme): add local setup steps
 ```
 
 Bad:
+
 ```
 update                        ← no keyword, no information
 fixed stuff                   ← past tense, vague
@@ -152,7 +155,7 @@ BREAKING CHANGE: `players` is now an object array instead of an ID array.
 
 ## 6. Branch Protection Settings
 
-Configure under *Settings → Branches → Add rule* (or *Rulesets*) for both `main` and `dev`:
+Configure under _Settings → Branches → Add rule_ (or _Rulesets_) for both `main` and `dev`:
 
 - [x] Require a pull request before merging
 - [x] Require at least 1 approving review
@@ -167,12 +170,14 @@ Configure under *Settings → Branches → Add rule* (or *Rulesets*) for both `m
 ## 7. Quick Do / Don't
 
 **Do**
+
 - Pull `dev` before starting anything new
 - Commit small and often, with a keyword every time
 - Rebase your feature branch onto `dev` before opening a PR
 - Delete your branch after it's merged
 
 **Don't**
+
 - Push directly to `main` or `dev`
 - Force-push to a shared branch
 - Commit secrets, `.env` files, or build artifacts
