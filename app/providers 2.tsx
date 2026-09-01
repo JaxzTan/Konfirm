@@ -6,34 +6,28 @@ import {
   createNetworkConfig,
   SuiClientProvider,
   WalletProvider,
-  useSuiClientContext,
+  useSuiClient,
 } from '@mysten/dapp-kit';
 import { getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc';
-import { registerEnokiWallets, isEnokiNetwork } from '@mysten/enoki';
+import { registerEnokiWallets } from '@mysten/enoki';
 import '@mysten/dapp-kit/dist/index.css';
 
-const suiNetwork = process.env.NEXT_PUBLIC_SUI_NETWORK ?? 'testnet';
-
 const { networkConfig } = createNetworkConfig({
-  [suiNetwork]: {
-    network: suiNetwork,
-    url: process.env.NEXT_PUBLIC_SUI_RPC ?? getJsonRpcFullnodeUrl(suiNetwork as 'testnet'),
+  testnet: {
+    network: 'testnet',
+    url: process.env.NEXT_PUBLIC_SUI_RPC ?? getJsonRpcFullnodeUrl('testnet'),
   },
 });
 
 const queryClient = new QueryClient();
 
-// Enoki wallets are bound to a network, so this must live above
-// WalletProvider and re-register whenever the active client/network changes.
 function EnokiWalletRegistration() {
-  const { client, network } = useSuiClientContext();
+  const client = useSuiClient();
 
   useEffect(() => {
-    if (!isEnokiNetwork(network)) return;
-
     const { unregister } = registerEnokiWallets({
       client,
-      network,
+      network: 'testnet',
       apiKey: process.env.NEXT_PUBLIC_ENOKI_API_KEY ?? '',
       providers: {
         google: {
@@ -43,7 +37,7 @@ function EnokiWalletRegistration() {
     });
 
     return unregister;
-  }, [client, network]);
+  }, [client]);
 
   return null;
 }
@@ -51,9 +45,11 @@ function EnokiWalletRegistration() {
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <SuiClientProvider networks={networkConfig} defaultNetwork={suiNetwork}>
-        <EnokiWalletRegistration />
-        <WalletProvider autoConnect>{children}</WalletProvider>
+      <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
+        <WalletProvider autoConnect>
+          <EnokiWalletRegistration />
+          {children}
+        </WalletProvider>
       </SuiClientProvider>
     </QueryClientProvider>
   );
