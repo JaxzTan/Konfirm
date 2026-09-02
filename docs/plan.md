@@ -17,15 +17,48 @@ Owns: Google Cloud Console, Enoki Portal, `.env` secrets, and undoing the backen
 | 3 | Register Google as an Auth Provider in the Portal using the client ID from #1 | Enoki_setup.md §2.3 | 1, 2 |
 | 4 | Configure the sponsored-tx allowlist on the private key with **only** `PACKAGE_ID::registry::create_verdict` once the Move package (TR-9) is deployed. Do **not** allowlist `registry::challenge`: PRD FR-13 says challenge is signed by P3's own wallet, self-paid — "不接 zkLogin、不接 sponsored tx". Sponsoring it would both contradict FR-13 and widen the gas-drain surface that #8 exists to close | Enoki_setup.md §2.4, TR-9, TR-13, FR-13 | Move package deploy |
 | 5 | Fill `.env`: `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, `NEXT_PUBLIC_ENOKI_API_KEY`, `ENOKI_SECRET_KEY` (server-only, never `NEXT_PUBLIC_`) | NFR-2 | 2 |
-| 6 | **Remove** `app/api/enoki/sponsor`, `app/api/enoki/execute`, `lib/enoki/server.ts`, `lib/enoki/sponsoredTransaction.ts` — this manual `EnokiClient` round trip is the flow Enoki_setup.md says to skip; sponsorship should be automatic via the Portal allowlist (#4) once the sender is an Enoki-wallet account | Enoki_setup.md §5 (explicit warning) | 4 |
-| 7 | Confirm `/api/attest` (FR-9, FR-12) builds the transaction and calls `useSignAndExecuteTransaction` directly, gas paid by the sponsor account, no custom sponsor endpoint in between | TR-12, TR-13, FR-12 | 6, Move package |
-| 8 | Rate-limit `/api/attest` (3 req/min/IP) so the sponsor's testnet SUI can't be drained | TR-13, NFR-2 | 7 |
-| 9 | `/api/health` check for sponsor balance + Gonka balance, per demo checklist | TRD §9, §5 | 7 |
+| 6 | ~~**Remove** the manual `EnokiClient` sponsor round trip~~ — **REVERSED, see the correction note below.** The server-side sponsor route is *required*; `app/api/sponsor` + `lib/enoki/sponsor.ts` are the correct implementation and must NOT be deleted | Enoki_setup.md §5 is wrong on this point | — |
+| 7 | ✅ `/api/attest` (FR-9, FR-12): rate-limit → PII-redact (TR-10) → Walrus upload → return the `create_verdict` args. It does **not** sign or sponsor; the client builds the tx kind, `/api/sponsor` wraps it, the Enoki wallet signs, `/api/sponsor/execute` submits | TR-12, TR-13, FR-12 | Move package |
+| 8 | ✅ Rate-limit `/api/attest` **and** `/api/sponsor` (3 req/min/IP) so the sponsor's gas pool can't be drained | TR-13, NFR-2 | 7 |
+| 9 | ✅ `/api/health` — Enoki app + Google provider, package exists on-chain, allowlist string to paste, Walrus/Gonka/client-ID config. Note: sponsor SUI balance is **not observable** (gas comes from Enoki's pool, not an address we own) and Gonka exposes no balance endpoint; the endpoint says so rather than faking it | TRD §9, §5 | 7 |
 | 10 | Redeploy checklist item: update Portal allowlist every time the Move package is republished (new `PACKAGE_ID`) | Enoki_setup.md §2.4 warning | 4 |
 
 > **Correction to #6 and #7 (2026-09-02).** Both assumed sponsorship happens automatically once a target is allowlisted. It does not. In `@mysten/enoki` 1.2.19 the wallet registered by `registerEnokiWallets` exposes only `sui:signTransaction` / `sui:signAndExecuteTransaction`, and both build gas against the *user's* address — which holds 0 SUI. Sponsorship lives behind `EnokiClient.createSponsoredTransaction`, which requires the private API key and therefore a server. A backend sponsor route is **required**, not optional; see Enoki_setup.md Step 5 (rewritten) and `next/lib/enoki/sponsor.ts`.
 >
 > **Correction to #4.** The two targets listed are wrong on both names and count. The deployed module is `registry`, the function is `create_verdict`, and `registry::challenge` must **not** be allowlisted — PRD FR-13 says challenges are self-paid through an ordinary wallet.
+
+---
+
+## ⚠️ Correction to P1 #6 — the wallet cannot self-sponsor
+
+This plan (and `Enoki_setup.md` §5) assumed that once a Move target is
+allowlisted in the Portal, an Enoki wallet's transactions are sponsored
+automatically, making a server-side sponsor route unnecessary. **That is not
+true of `@mysten/enoki` 1.2.19.** Verified in the installed SDK:
+
+- `dist/wallet/wallet.mjs` exposes only `sui:signTransaction` and
+  `sui:signAndExecuteTransaction`; both do
+  `parsedTransaction.build({ client })` (lines 115 and 124), which builds
+  against the **user's own address**. A zkLogin account holds 0 SUI, so the
+  build fails for want of a gas coin.
+- `grep -i sponsor dist/wallet/wallet.mjs` returns **nothing**. The wallet has
+  no sponsorship path at all.
+- The only sponsorship API is `EnokiClient.createSponsoredTransaction`
+  (`dist/EnokiClient/index.mjs:70` → `POST transaction-blocks/sponsor`), which
+  requires `ENOKI_SECRET_KEY` and therefore a server.
+
+So the correct flow is a three-step round trip, not a direct client call:
+
+```
+/api/attest        → Walrus blob + create_verdict args
+client             → build transaction KIND bytes (no gas, no sender coins)
+/api/sponsor       → EnokiClient.createSponsoredTransaction → { bytes, digest }
+Enoki wallet       → signs those bytes
+/api/sponsor/execute → EnokiClient.executeSponsoredTransaction → digest
+```
+
+Acceptance checks #3 and #5 still hold and are still the real proof: the user
+address stays at 0 SUI and the gas payer is Enoki's pool, not the user.
 
 ---
 
