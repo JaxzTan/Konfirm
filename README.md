@@ -2,25 +2,38 @@
 
 <!-- TODO: confirm — one-line project description -->
 
-Next.js web application.
+Two independent parts, kept in separate top-level folders:
+
+- `next/` — the Next.js web application
+- `move/` — the Sui Move package (`konfirm::registry`)
 
 ## Requirements
 
-- Node.js v24+
-- npm
+- Node.js v24+, npm (for `next/`)
+- the `sui` CLI (for `move/`)
 
 ## Setup
 
 ```bash
+cd next
 npm install
 ```
 
 ## Running it
 
+All commands below run from inside `next/`:
+
 ```bash
 npm run dev     # dev server (Turbopack, hot reload), http://localhost:3400
 npm run build   # production build to .next/
 npm run start   # serve the production build (after npm run build)
+```
+
+For the Move package, from inside `move/`:
+
+```bash
+sui move build
+sui move test
 ```
 
 ## Configuration
