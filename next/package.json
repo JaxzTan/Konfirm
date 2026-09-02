@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev -p 3400",
+    "dev:https": "next dev -p 3400 --experimental-https",
     "build": "next build",
     "start": "next start -p 3400",
     "format": "prettier --write \"app/**/*.{ts,tsx,css}\" \"*.ts\"",

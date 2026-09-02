@@ -5,6 +5,7 @@ build/
 *.tsbuildinfo
 next-env.d.ts
 coverage/
+certificates/
 .env
 .env.local
 *.log
