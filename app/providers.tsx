@@ -2,40 +2,6 @@
 
 import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-<<<<<<< HEAD
-import {
-  createNetworkConfig,
-  SuiClientProvider,
-  WalletProvider,
-  useSuiClientContext,
-} from '@mysten/dapp-kit';
-import { getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc';
-import { registerEnokiWallets, isEnokiNetwork } from '@mysten/enoki';
-import '@mysten/dapp-kit/dist/index.css';
-
-const suiNetwork = process.env.NEXT_PUBLIC_SUI_NETWORK ?? 'testnet';
-
-const { networkConfig } = createNetworkConfig({
-  [suiNetwork]: {
-    network: suiNetwork,
-    url: process.env.NEXT_PUBLIC_SUI_RPC ?? getJsonRpcFullnodeUrl(suiNetwork as 'testnet'),
-  },
-});
-
-const queryClient = new QueryClient();
-
-// Enoki wallets are bound to a network, so this must live above
-// WalletProvider and re-register whenever the active client/network changes.
-function EnokiWalletRegistration() {
-  const { client, network } = useSuiClientContext();
-
-  useEffect(() => {
-    if (!isEnokiNetwork(network)) return;
-
-    const { unregister } = registerEnokiWallets({
-      client,
-      network,
-=======
 import { createNetworkConfig, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
 import { getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc';
 import { registerEnokiWallets } from '@mysten/enoki';
@@ -62,7 +28,6 @@ function EnokiWalletRegistration() {
     const { unregister } = registerEnokiWallets({
       client: suiClient,
       network: suiNetwork,
->>>>>>> origin/dev
       apiKey: process.env.NEXT_PUBLIC_ENOKI_API_KEY ?? '',
       providers: {
         google: {
@@ -72,11 +37,7 @@ function EnokiWalletRegistration() {
     });
 
     return unregister;
-<<<<<<< HEAD
-  }, [client, network]);
-=======
   }, []);
->>>>>>> origin/dev
 
   return null;
 }
