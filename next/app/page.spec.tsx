@@ -22,6 +22,12 @@ vi.mock('@/lib/sui/useSignAndExecuteTransaction', () => ({
   useSignAndExecuteTransaction: () => ({ mutateAsync: vi.fn() }),
 }));
 
+// GoogleLogin calls useRouter() (for the redirectTo prop) — needs an App
+// Router context that a plain render-only test doesn't provide.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 describe('Home', () => {
   it('renders the app name', () => {
     render(<Home />);

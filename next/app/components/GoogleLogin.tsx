@@ -12,11 +12,11 @@ import { isEnokiWallet } from "@mysten/enoki";
 // component, e.g. app/page.tsx) or `redirectTo` (a plain string, safe to
 // pass from a server component like app/login/page.tsx). Pass exactly one.
 export function GoogleLogin({
-  label,
+  labels,
   onConnected,
   redirectTo,
 }: {
-  label: string;
+  labels: { signIn: string; unavailable: string };
   onConnected?: () => void;
   redirectTo?: string;
 }) {
@@ -29,7 +29,7 @@ export function GoogleLogin({
 
   if (!googleWallet) {
     return (
-      <p className="text-sm text-gray-500 text-center">Sign-in is temporarily unavailable.</p>
+      <p className="text-sm text-gray-500 text-center">{labels.unavailable}</p>
     );
   }
 
@@ -54,7 +54,7 @@ export function GoogleLogin({
     >
       {/* eslint-disable-next-line @next/next/no-img-element -- Enoki ships the provider icon as a remote URL, not a local asset */}
       <img src={googleWallet.icon} alt="" width={20} height={20} />
-      {isPending ? "Connecting..." : label}
+      {isPending ? "Connecting..." : labels.signIn}
     </button>
   );
 }
