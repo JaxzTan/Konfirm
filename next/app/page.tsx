@@ -1,10 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { NextIntlClientProvider, useTranslations } from "next-intl";
 import { GoogleLogin } from "./components/GoogleLogin";
+import { Transaction } from "@mysten/sui/transactions";
 
+import { AccountBadge } from "@/app/components/AccountBadge";
+import { GoogleLogin } from "@/app/components/GoogleLogin";
+import { useKonfirmIdentity } from "@/lib/signer";
+import { useSignAndExecuteTransaction } from "@/lib/sui/useSignAndExecuteTransaction";
+import { computeClaimHash } from "@/lib/attest/claimHash";
 import enMessages from "@/messages/en.json";
 import bmMessages from "@/messages/bm.json";
 import zhMessages from "@/messages/zh.json";
@@ -31,6 +37,8 @@ function HomeContent({
   setLang: (lang: Locale) => void;
 }) {
   const t = useTranslations("Home");
+  const { isSignedIn } = useKonfirmIdentity();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
   const [mode, setMode] = useState<"text" | "link" | "photo">("text");
   const [text, setText] = useState("");
@@ -39,7 +47,9 @@ function HomeContent({
   const [showResult, setShowResult] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [needsLogin, setNeedsLogin] = useState(false);
+  const [needsConfirm, setNeedsConfirm] = useState(false);
   const [isAttesting, setIsAttesting] = useState(false);
+  const [attestError, setAttestError] = useState<string | null>(null);
   const [objectId, setObjectId] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
 
@@ -66,7 +76,9 @@ function HomeContent({
   const resetResult = () => {
     setShowResult(false);
     setNeedsLogin(false);
+    setNeedsConfirm(false);
     setIsAttesting(false);
+    setAttestError(null);
     setObjectId(null);
     setResult(null);
     setText("");
@@ -96,7 +108,13 @@ function HomeContent({
 
       const data = await checkText(claimText);
       setResult(data);
-      setNeedsLogin(true); // login is what triggers the on-chain save, not a separate step
+      // Already logged in from an earlier claim: skip straight to the
+      // confirm step instead of re-prompting for a login that already happened.
+      if (isSignedIn) {
+        setNeedsConfirm(true);
+      } else {
+        setNeedsLogin(true);
+      }
     } catch (error) {
       console.error("Error checking claim:", error);
       alert("Something went wrong — check the console for details.");
@@ -116,8 +134,14 @@ function HomeContent({
     await new Promise((resolve) => setTimeout(resolve, 1800));
     setObjectId(`demo-${Date.now()}`);
 
-    setIsAttesting(false);
-    setShowResult(true);
+      setObjectId(verdict.objectId);
+      setShowResult(true);
+    } catch (error) {
+      console.error("Attest failed:", error);
+      setAttestError(error instanceof Error ? error.message : "Something went wrong.");
+    } finally {
+      setIsAttesting(false);
+    }
   };
 
   const modelWord = (count: number) => (count === 1 ? t("model") : t("models"));
@@ -132,6 +156,12 @@ function HomeContent({
           <span className="text-white font-serif font-bold text-xl">Konfirm</span>
         </Link>
         <div className="flex items-center gap-4">
+          {/* Renders nothing while signed out, so the header is unchanged
+              for anyone who hasn't logged in. */}
+          <AccountBadge
+            labels={{ signedInAs: t("signedInAs"), signOut: t("signOut") }}
+            className="hidden sm:flex items-center gap-3 text-xs text-gray-200"
+          />
           <select
             value={lang}
             onChange={(e) => setLang(e.target.value as Locale)}
@@ -158,7 +188,7 @@ function HomeContent({
         <p className="text-gray-300 text-sm max-w-md mx-auto">{t("heroSub")}</p>
       </div>
 
-      {!showResult && !isLoading && !needsLogin && !isAttesting && (
+      {!showResult && !isLoading && !needsLogin && !needsConfirm && !isAttesting && !attestError && (
         <div className="max-w-3xl mx-auto px-4 sm:px-8 py-8 sm:py-10">
           <p className="font-mono text-xs uppercase tracking-widest text-gray-500 mb-4">{t("whatToCheck")}</p>
 
@@ -250,12 +280,30 @@ function HomeContent({
         </div>
       )}
 
-      {/* mock save; TODO wire to real /api/attest */}
       {isAttesting && (
         <div className="max-w-3xl mx-auto px-4 sm:px-8 py-20 text-center">
           <div className="w-12 h-12 border-4 border-gray-300 border-t-[#1f4d3d] rounded-full animate-spin mx-auto mb-6"></div>
           <p className="font-semibold text-lg text-gray-900">{t("attestingTitle")}</p>
           <p className="text-gray-500 text-sm">{t("attestingSub")}</p>
+        </div>
+      )}
+
+      {attestError && (
+        <div className="max-w-md mx-auto px-4 sm:px-8 py-12 sm:py-16 text-center">
+          <h2 className="font-serif text-2xl font-bold text-gray-900 mb-3">{t("attestErrorTitle")}</h2>
+          <p className="text-gray-600 text-sm leading-relaxed mb-8">{attestError}</p>
+          <button
+            onClick={handleAttest}
+            className="w-full bg-[#1f4d3d] text-white rounded-2xl py-4 font-bold text-base mb-3"
+          >
+            {t("retry")}
+          </button>
+          <button
+            onClick={resetResult}
+            className="w-full border border-gray-300 rounded-2xl py-4 font-bold text-base text-gray-900"
+          >
+            {t("checkAnother")}
+          </button>
         </div>
       )}
 

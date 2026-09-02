@@ -32,6 +32,17 @@ function EnokiWalletRegistration() {
       providers: {
         google: {
           clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? '',
+          // Pinned. The SDK otherwise defaults this to
+          // `window.location.href.split('#')[0]` (see wallet.mjs), which
+          // includes the path *and* query string — so signing in from `/`,
+          // `/login` and `/?lang=zh` would each send a different
+          // redirect_uri, and Google matches redirect URIs by exact string.
+          // Every one of them would need its own entry in the Cloud Console.
+          // Pinning costs nothing here because Enoki authenticates in a
+          // popup: this URL only ever loads inside that popup, which the SDK
+          // closes as soon as it reads the token. The page you're on never
+          // navigates, so in-progress state survives login.
+          redirectUrl: `${window.location.origin}/login`,
         },
       },
     });

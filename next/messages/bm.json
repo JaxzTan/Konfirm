@@ -37,9 +37,18 @@
     "loginGateTitle": "Satu langkah lagi untuk lihat keputusan anda",
     "loginGateBody": "Log masuk supaya kami dapat simpan keputusan ini secara kekal di blockchain — ini yang membolehkan sesiapa sahaja mengesahkannya secara bebas, selama-lamanya. Kami tidak mengumpul sebarang maklumat peribadi, dan log masuk tidak mencipta akaun yang terikat dengan Konfirm.",
     "continueGoogle": "Teruskan dengan Google",
+    "confirmTitle": "Sedia untuk simpan di blockchain?",
+    "confirmBody": "Ini akan merekodkan keputusan anda secara kekal di blockchain, tanpa sebarang kos kepada anda. Sesiapa sahaja boleh mengesahkannya secara bebas, selama-lamanya, dan ia tidak boleh diedit atau dipadam.",
+    "confirmButton": "Ya, simpan di blockchain",
+    "cancelButton": "Bukan sekarang",
     "attestingTitle": "Menyimpan keputusan anda di blockchain...",
     "attestingSub": "Ini hanya mengambil masa sebentar.",
-    "share": "Kongsi"
+    "attestErrorTitle": "Gagal menyimpan di blockchain",
+    "retry": "Cuba lagi",
+    "share": "Kongsi",
+    "signInUnavailable": "Log masuk tidak tersedia buat masa ini.",
+    "signedInAs": "Log masuk sebagai",
+    "signOut": "Log keluar"
   },
   "Login": {
     "leftHeadline": "Jadikan keputusan ini bukti kekal yang boleh disemak.",
@@ -47,8 +56,9 @@
     "rightHeading": "Log masuk untuk sahkan",
     "rightSub": "Pilih akaun untuk log masuk",
     "continueGoogle": "Teruskan dengan Google",
-    "continueFacebook": "Teruskan dengan Facebook",
-    "continueApple": "Teruskan dengan Apple"
+    "signInUnavailable": "Log masuk tidak tersedia buat masa ini.",
+    "signedInAs": "Log masuk sebagai",
+    "signOut": "Log keluar"
   },
   "Card": {
     "verifiedOnChain": "Disahkan on-chain, jangan percaya tangkapan skrin",

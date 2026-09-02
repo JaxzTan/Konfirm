@@ -37,9 +37,18 @@
     "loginGateTitle": "还差一步即可查看结果",
     "loginGateBody": "登录后我们才能把这个结果永久保存在区块链上——这样任何人都能独立、永久地核实它。我们不会收集任何个人信息，登录也不会创建与 Konfirm 绑定的账户。",
     "continueGoogle": "使用 Google 继续",
+    "confirmTitle": "确定要把结果存上链吗？",
+    "confirmBody": "这将把您的结果永久记录在区块链上，您无需支付任何费用。任何人都能独立、永久地核实它，并且无法被编辑或删除。",
+    "confirmButton": "确定，存上链",
+    "cancelButton": "暂不",
     "attestingTitle": "正在将结果保存到链上...",
     "attestingSub": "只需片刻。",
-    "share": "分享"
+    "attestErrorTitle": "存证失败",
+    "retry": "重试",
+    "share": "分享",
+    "signInUnavailable": "登录暂时不可用。",
+    "signedInAs": "已登录",
+    "signOut": "退出登录"
   },
   "Login": {
     "leftHeadline": "把这个结果变成永久、可核实的证据。",
@@ -47,8 +56,9 @@
     "rightHeading": "登录以存证",
     "rightSub": "选择一个账户登录",
     "continueGoogle": "使用 Google 继续",
-    "continueFacebook": "使用 Facebook 继续",
-    "continueApple": "使用 Apple 继续"
+    "signInUnavailable": "登录暂时不可用。",
+    "signedInAs": "已登录",
+    "signOut": "退出登录"
   },
   "Card": {
     "verifiedOnChain": "已链上验证，请勿相信截图",
