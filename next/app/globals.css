@@ -11,6 +11,17 @@
   --font-sans: var(--font-plus-jakarta-sans);
   --font-serif: var(--font-fraunces);
   --font-mono: var(--font-jetbrains-mono);
+
+  /* The whole app is locked to a fixed mobile-width frame (see layout.tsx),
+     but sm:/md:/lg: utilities key off the real browser window width, not
+     that frame — so on a wide monitor they'd still fire and break the
+     layout. Push every breakpoint out of reach so pages always render
+     their base (mobile) classes, regardless of the real window size. */
+  --breakpoint-sm: 99999px;
+  --breakpoint-md: 99999px;
+  --breakpoint-lg: 99999px;
+  --breakpoint-xl: 99999px;
+  --breakpoint-2xl: 99999px;
 }
 
 @media (prefers-color-scheme: dark) {
