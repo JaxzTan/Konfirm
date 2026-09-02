@@ -1,79 +1,60 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useConnectWallet, useWallets } from '@mysten/dapp-kit';
-import { isEnokiWallet } from '@mysten/enoki';
-import { FcGoogle } from 'react-icons/fc';
+import { useRouter } from "next/navigation";
+import { useConnectWallet, useWallets } from "@mysten/dapp-kit";
+import { isEnokiWallet } from "@mysten/enoki";
 
-import { useKonfirmIdentity } from '@/lib/signer';
-
-export type GoogleLoginLabels = {
-  signIn: string;
-  unavailable: string;
-};
-
-/**
- * The app's only sign-in surface (P2 #1).
- *
- * Enoki registers its zkLogin wallet through the wallet-standard, so from
- * here it is an ordinary wallet connect — no zkLogin details leak into the
- * UI. We deliberately don't use dapp-kit's <ConnectButton />: it shows a
- * wallet picker full of terms ("connect", "wallet", "extension") that mean
- * nothing to the NFR-5 persona. One button, one provider, no jargon.
- *
- * Renders nothing once someone is signed in, so it can sit next to the
- * signed-in branch without either caller having to check.
- */
+// Google-only per PRD (see fix/login-google-only) — Enoki only registers a
+// wallet for a provider that is configured in providers.tsx *and* enabled
+// in the Enoki Portal, so this renders nothing if that isn't set up yet.
+//
+// Accepts either `onConnected` (a callback — only usable from a client
+// component, e.g. app/page.tsx) or `redirectTo` (a plain string, safe to
+// pass from a server component like app/login/page.tsx). Pass exactly one.
 export function GoogleLogin({
-  labels,
-  className,
+  label,
+  onConnected,
+  redirectTo,
 }: {
-  labels: GoogleLoginLabels;
-  className?: string;
+  label: string;
+  onConnected?: () => void;
+  redirectTo?: string;
 }) {
-  const { isSignedIn } = useKonfirmIdentity();
+  const router = useRouter();
   const { mutate: connect, isPending } = useConnectWallet();
 
-  // providers.tsx registers the Enoki wallet inside an effect, so during
-  // SSR and the first client render there is legitimately no wallet yet.
-  // Without this flag the "unavailable" message below would flash on every
-  // page load before the button appears.
-  const [registrationSettled, setRegistrationSettled] = useState(false);
-  useEffect(() => setRegistrationSettled(true), []);
-
-  // Enoki only registers a wallet for a provider configured in both
-  // providers.tsx *and* the Enoki Portal. A missing wallet here is therefore
-  // a config problem, not a user problem — hence the neutral message below
-  // rather than a dead button that would fail on click.
-  const wallet = useWallets()
+  const googleWallet = useWallets()
     .filter(isEnokiWallet)
-    .find((candidate) => candidate.provider === 'google');
+    .find((wallet) => wallet.provider === "google");
 
-  if (isSignedIn) return null;
-
-  // No wallet *yet* vs. no wallet *at all* look identical here, so only the
-  // settled case is treated as a configuration failure.
-  if (!wallet) {
-    if (!registrationSettled) {
-      return (
-        <button type="button" disabled className={className}>
-          <FcGoogle className="w-6 h-6" />
-          {labels.signIn}
-        </button>
-      );
-    }
-    return <p className="text-sm text-gray-500">{labels.unavailable}</p>;
+  if (!googleWallet) {
+    return (
+      <p className="text-sm text-gray-500 text-center">Sign-in is temporarily unavailable.</p>
+    );
   }
+
+  const handleClick = () => {
+    connect(
+      { wallet: googleWallet },
+      {
+        onSuccess: () => {
+          onConnected?.();
+          if (redirectTo) router.push(redirectTo);
+        },
+      },
+    );
+  };
 
   return (
     <button
       type="button"
-      onClick={() => connect({ wallet })}
+      onClick={handleClick}
       disabled={isPending}
-      className={className}
+      className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-2xl px-6 py-4 font-bold text-base text-gray-900 shadow-sm hover:shadow-md transition disabled:opacity-60 disabled:cursor-progress"
     >
-      <FcGoogle className="w-6 h-6" />
-      {labels.signIn}
+      {/* eslint-disable-next-line @next/next/no-img-element -- Enoki ships the provider icon as a remote URL, not a local asset */}
+      <img src={googleWallet.icon} alt="" width={20} height={20} />
+      {isPending ? "Connecting..." : label}
     </button>
   );
 }
