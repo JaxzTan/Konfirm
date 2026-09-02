@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { Fraunces, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -26,7 +27,7 @@ export const metadata: Metadata = {
     "Paste a message, link, or screenshot. Konfirm cross-checks it with 3 AI models and records the verdict on-chain so anyone can verify it independently.",
 };
 
-export default function RootLayout({ children }: { children: JSX.Element | JSX.Element[] }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
