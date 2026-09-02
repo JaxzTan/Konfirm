@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { createTranslator } from "next-intl";
-import { FcGoogle } from "react-icons/fc";
 
+import { AccountBadge } from "@/app/components/AccountBadge";
+import { GoogleLogin } from "@/app/components/GoogleLogin";
 import enMessages from "@/messages/en.json";
 import bmMessages from "@/messages/bm.json";
 import zhMessages from "@/messages/zh.json";
@@ -45,10 +46,17 @@ export default async function LoginPage({
           <h2 className="font-serif text-3xl font-bold mb-2 text-gray-900">{t("rightHeading")}</h2>
           <p className="text-gray-600 text-base mb-8">{t("rightSub")}</p>
 
-          <button className="w-full flex items-center gap-4 bg-white rounded-2xl px-6 py-5 font-bold text-base text-gray-900 shadow-sm hover:shadow-md transition">
-            <FcGoogle className="w-6 h-6" />
-            {t("continueGoogle")}
-          </button>
+          {/* This page is a server component; both of these are client
+              components, which is exactly the split we want — the wallet
+              hooks stay in the smallest possible island. */}
+          <GoogleLogin
+            labels={{ signIn: t("continueGoogle"), unavailable: t("signInUnavailable") }}
+            className="w-full flex items-center gap-4 bg-white rounded-2xl px-6 py-5 font-bold text-base text-gray-900 shadow-sm hover:shadow-md transition disabled:opacity-60"
+          />
+          <AccountBadge
+            labels={{ signedInAs: t("signedInAs"), signOut: t("signOut") }}
+            className="flex items-center gap-3 text-sm text-gray-600"
+          />
         </div>
       </div>
     </div>

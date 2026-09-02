@@ -39,7 +39,10 @@
     "continueGoogle": "Continue with Google",
     "attestingTitle": "Saving your result on-chain...",
     "attestingSub": "This only takes a moment.",
-    "share": "Share"
+    "share": "Share",
+    "signInUnavailable": "Sign-in is temporarily unavailable.",
+    "signedInAs": "Signed in as",
+    "signOut": "Sign out"
   },
   "Login": {
     "leftHeadline": "Turn this result into permanent, checkable proof.",
@@ -47,8 +50,9 @@
     "rightHeading": "Login in to attest",
     "rightSub": "Choose an account to login",
     "continueGoogle": "Continue with Google",
-    "continueFacebook": "Continue with Facebook",
-    "continueApple": "Continue with Apple"
+    "signInUnavailable": "Sign-in is temporarily unavailable.",
+    "signedInAs": "Signed in as",
+    "signOut": "Sign out"
   },
   "Card": {
     "verifiedOnChain": "Verified on-chain, do not trust screenshots",

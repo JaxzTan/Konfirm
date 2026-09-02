@@ -39,7 +39,10 @@
     "continueGoogle": "Teruskan dengan Google",
     "attestingTitle": "Menyimpan keputusan anda di blockchain...",
     "attestingSub": "Ini hanya mengambil masa sebentar.",
-    "share": "Kongsi"
+    "share": "Kongsi",
+    "signInUnavailable": "Log masuk tidak tersedia buat masa ini.",
+    "signedInAs": "Log masuk sebagai",
+    "signOut": "Log keluar"
   },
   "Login": {
     "leftHeadline": "Jadikan keputusan ini bukti kekal yang boleh disemak.",
@@ -47,8 +50,9 @@
     "rightHeading": "Log masuk untuk sahkan",
     "rightSub": "Pilih akaun untuk log masuk",
     "continueGoogle": "Teruskan dengan Google",
-    "continueFacebook": "Teruskan dengan Facebook",
-    "continueApple": "Teruskan dengan Apple"
+    "signInUnavailable": "Log masuk tidak tersedia buat masa ini.",
+    "signedInAs": "Log masuk sebagai",
+    "signOut": "Log keluar"
   },
   "Card": {
     "verifiedOnChain": "Disahkan on-chain, jangan percaya tangkapan skrin",

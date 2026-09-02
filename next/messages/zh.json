@@ -39,7 +39,10 @@
     "continueGoogle": "使用 Google 继续",
     "attestingTitle": "正在将结果保存到链上...",
     "attestingSub": "只需片刻。",
-    "share": "分享"
+    "share": "分享",
+    "signInUnavailable": "登录暂时不可用。",
+    "signedInAs": "已登录",
+    "signOut": "退出登录"
   },
   "Login": {
     "leftHeadline": "把这个结果变成永久、可核实的证据。",
@@ -47,8 +50,9 @@
     "rightHeading": "登录以存证",
     "rightSub": "选择一个账户登录",
     "continueGoogle": "使用 Google 继续",
-    "continueFacebook": "使用 Facebook 继续",
-    "continueApple": "使用 Apple 继续"
+    "signInUnavailable": "登录暂时不可用。",
+    "signedInAs": "已登录",
+    "signOut": "退出登录"
   },
   "Card": {
     "verifiedOnChain": "已链上验证，请勿相信截图",

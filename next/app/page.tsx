@@ -4,6 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { NextIntlClientProvider, useTranslations } from "next-intl";
 
+import { AccountBadge } from "@/app/components/AccountBadge";
+import { GoogleLogin } from "@/app/components/GoogleLogin";
+import { useKonfirmIdentity } from "@/lib/signer";
 import enMessages from "@/messages/en.json";
 import bmMessages from "@/messages/bm.json";
 import zhMessages from "@/messages/zh.json";
@@ -30,6 +33,7 @@ function HomeContent({
   setLang: (lang: Locale) => void;
 }) {
   const t = useTranslations("Home");
+  const { isSignedIn } = useKonfirmIdentity();
 
   const [mode, setMode] = useState<"text" | "link" | "photo">("text");
   const [text, setText] = useState("");
@@ -104,11 +108,14 @@ function HomeContent({
     }
   };
 
-  const handleLoginAndAttest = async () => {
+  // Sign-in is real now (Enoki zkLogin, see <GoogleLogin />). The attestation
+  // below is still a mock: it needs the Move package deployed for a real
+  // PACKAGE_ID, then /api/attest + useSignAndExecuteTransaction.
+  // TODO(P1 #7, P2 #4): replace the timeout with the sponsored transaction.
+  const handleAttest = async () => {
     setNeedsLogin(false);
     setIsAttesting(true);
 
-    // TODO: replace with real zkLogin + /api/attest (Walrus upload + sponsored tx)
     await new Promise((resolve) => setTimeout(resolve, 1800));
     setObjectId(`demo-${Date.now()}`);
 
@@ -128,6 +135,12 @@ function HomeContent({
           <span className="text-white font-serif font-bold text-xl">Konfirm</span>
         </Link>
         <div className="flex items-center gap-4">
+          {/* Renders nothing while signed out, so the header is unchanged
+              for anyone who hasn't logged in. */}
+          <AccountBadge
+            labels={{ signedInAs: t("signedInAs"), signOut: t("signOut") }}
+            className="hidden sm:flex items-center gap-3 text-xs text-gray-200"
+          />
           <select
             value={lang}
             onChange={(e) => setLang(e.target.value as Locale)}
@@ -242,12 +255,23 @@ function HomeContent({
         <div className="max-w-md mx-auto px-4 sm:px-8 py-12 sm:py-16 text-center">
           <h2 className="font-serif text-2xl font-bold text-gray-900 mb-3">{t("loginGateTitle")}</h2>
           <p className="text-gray-600 text-sm leading-relaxed mb-8">{t("loginGateBody")}</p>
-          <button
-            onClick={handleLoginAndAttest}
-            className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-2xl px-6 py-4 font-bold text-base text-gray-900 shadow-sm hover:shadow-md transition"
-          >
-            {t("continueGoogle")}
-          </button>
+          {/* Exactly one of these is ever visible: <GoogleLogin /> renders
+              null once an account exists, and the attest button is gated on
+              the same condition. Signing in no longer attests by itself —
+              the user gets a beat to see they're signed in and choose to
+              publish, which is the seed of the P2 #3 confirm step. */}
+          <GoogleLogin
+            labels={{ signIn: t("continueGoogle"), unavailable: t("signInUnavailable") }}
+            className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-2xl px-6 py-4 font-bold text-base text-gray-900 shadow-sm hover:shadow-md transition disabled:opacity-60"
+          />
+          {isSignedIn && (
+            <button
+              onClick={handleAttest}
+              className="w-full flex items-center justify-center gap-3 bg-[#0f2e23] rounded-2xl px-6 py-4 font-bold text-base text-white shadow-sm hover:shadow-md transition"
+            >
+              {t("attestAndShare")}
+            </button>
+          )}
         </div>
       )}
 
