@@ -23,6 +23,10 @@ Owns: Google Cloud Console, Enoki Portal, `.env` secrets, and undoing the backen
 | 9 | `/api/health` check for sponsor balance + Gonka balance, per demo checklist | TRD §9, §5 | 7 |
 | 10 | Redeploy checklist item: update Portal allowlist every time the Move package is republished (new `PACKAGE_ID`) | Enoki_setup.md §2.4 warning | 4 |
 
+> **Correction to #6 and #7 (2026-09-02).** Both assumed sponsorship happens automatically once a target is allowlisted. It does not. In `@mysten/enoki` 1.2.19 the wallet registered by `registerEnokiWallets` exposes only `sui:signTransaction` / `sui:signAndExecuteTransaction`, and both build gas against the *user's* address — which holds 0 SUI. Sponsorship lives behind `EnokiClient.createSponsoredTransaction`, which requires the private API key and therefore a server. A backend sponsor route is **required**, not optional; see Enoki_setup.md Step 5 (rewritten) and `next/lib/enoki/sponsor.ts`.
+>
+> **Correction to #4.** The two targets listed are wrong on both names and count. The deployed module is `registry`, the function is `create_verdict`, and `registry::challenge` must **not** be allowlisted — PRD FR-13 says challenges are self-paid through an ordinary wallet.
+
 ---
 
 ## P2 — Wallet UI, identity surface, sign-flow UX
@@ -74,3 +78,26 @@ P1: GCP → Portal app/keys → Auth provider → .env
 ```
 
 P1 items 1–3, 5 and P2 item 1, 5 can start immediately in parallel. Everything past that gates on the Move package being deployed on testnet (separate TRD item #9, not in this plan).
+
+---
+
+## 执行状态 · 2026-09-02
+
+**P2 全部完成** —— `GoogleLogin`、`lib/signer.ts`、confirm-before-sign 步骤、attest 按钮接线、dapp-kit CSS、`AccountBadge` 登出，均已在代码里。
+
+**P1**
+
+| # | 状态 | 备注 |
+|---|---|---|
+| 1 | ✅ | redirect URI 需为 `https://localhost:3400/login`（带路径、https、3400），见 Enoki_setup.md §1.3 |
+| 2 | ✅ | `/api/health` 实测 `getApp()` 通过 |
+| 3 | ✅ | 同上，`providers: google` |
+| 4 | ✅ | 实测 `POST /api/sponsor` 返回 200 + 已填 gas 的 bytes，说明 Portal allowlist 已生效 |
+| 5 | ✅ | 注意 Next.js 读的是 `next/.env`，不是仓库根目录的 `.env` |
+| 6 | ⛔️ 已推翻 | 见上方 correction —— 后端赞助路由是必需品，已按正确形态重建 |
+| 7 | ✅ | `/api/attest` 只负责 Walrus + 参数；上链走 `useSignAndExecuteTransaction` → `/api/sponsor` |
+| 8 | ✅ | `/api/attest` 与 `/api/sponsor` 各 3 req/min/IP |
+| 9 | ✅ | `GET /api/health`。两项 TRD §9 要的数字取不到，响应里如实写明：Enoki gas pool 不是我们的地址所以没有 sponsor 余额可读；Gonka 没有余额接口 |
+| 10 | ✅ | checklist 写在 Enoki_setup.md 末尾 |
+
+**验收标准剩余项**：1、2、6 由 P2 在浏览器点一遍；3 和 5 需要一笔真实交易后在 testnet explorer 上看 gas payer —— 这是唯一还没被自动化覆盖的证据。

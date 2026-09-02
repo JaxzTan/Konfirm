@@ -38,8 +38,13 @@ Credentials → **Create Credentials → OAuth client ID** → Application type 
 
 | 字段 | 值 |
 |---|---|
-| Authorized JavaScript origins | `http://localhost:3000`、`https://你的-vercel-域名` |
-| Authorized redirect URIs | `http://localhost:3000`、`https://你的-vercel-域名` |
+| Authorized JavaScript origins | `https://localhost:3400`、`https://你的-vercel-域名` |
+| Authorized redirect URIs | `https://localhost:3400/login`、`https://你的-vercel-域名/login` |
+
+> **注意两处与通用教程不同：**
+>
+> 1. 端口是 **3400**，且 `npm run dev` 用 `--experimental-https`，所以 scheme 是 **https**。跑 `npm run dev:http` 时另外再加一组 `http://localhost:3400` / `http://localhost:3400/login`。
+> 2. redirect URI **带 `/login` 路径**。`app/providers.tsx` 把 `redirectUrl` 钉死成 `${window.location.origin}/login`，不钉的话 SDK 默认用当前完整 URL（含 query string），每个页面都要单独登记一条。
 
 Create → 复制 **Client ID**（形如 `xxxxx.apps.googleusercontent.com`）。
 
@@ -83,9 +88,14 @@ Auth Providers → Add provider → 选 **Google** → 粘贴 Step 1.3 的 Clien
 在 private key 的配置里，**显式列出允许被赞助的 Move call target**：
 
 ```
-0x你的PACKAGE_ID::verdict::submit_verdict
-0x你的PACKAGE_ID::verdict::add_challenge
+0x你的PACKAGE_ID::registry::create_verdict
 ```
+
+> **只有这一条。** 模块名是 `registry` 不是 `verdict`，函数名是 `create_verdict` 不是 `submit_verdict`（见 `move/sources/registry.move`）。
+>
+> `registry::challenge` **不要**加进 allowlist —— PRD FR-13 明确写着 challenge「走普通钱包签名，不接 zkLogin、不接 sponsored tx」，加了等于替用户付本该他们自付的 gas。
+>
+> 这份 allowlist 在代码里也有一份镜像：`next/lib/enoki/sponsor.ts` 的 `allowedMoveCallTargets()`。两边必须一致。
 
 > **严重警告**
 >
@@ -209,28 +219,55 @@ export function GoogleLogin() {
 
 ---
 
-## Step 5 — 签名并执行（赞助自动生效）
+## Step 5 — 签名并执行（赞助**不是**自动的）
+
+> **本节已按 `@mysten/enoki` 1.2.19 的实际行为改写。**
+>
+> 这份手册原先写的是「只要 target 在 allowlist 里，gas 就自动由 Enoki 代付，不用写任何赞助逻辑」。**这是错的**，照做会在 demo 当天炸。
+>
+> 实际情况：`registerEnokiWallets` 注册的钱包只提供 `sui:signTransaction` 和 `sui:signAndExecuteTransaction`，两个内部都走 `transaction.build({ client })` —— 用**用户自己的**地址找 gas coin。zkLogin 账户余额是 0，所以直接报「找不到 gas coin」。SDK 里唯一的赞助入口是 `EnokiClient.createSponsoredTransaction`，官方文档明写 *"Sponsoring transactions requires using private API keys"*，而 private key 不能进浏览器。**所以必须有后端。**
+
+三步，前后端各一半：
+
+```
+① 前端 build 出 transaction kind（无 sender、无 gas）
+       ↓  POST /api/sponsor
+② 后端拿 ENOKI_SECRET_KEY 调 createSponsoredTransaction
+   → 返回 { bytes（已填好赞助方 gas）, digest }
+       ↓
+③ 前端用钱包对 bytes 签名 → POST /api/sponsor/execute
+   → 后端 executeSponsoredTransaction(digest, signature)
+```
+
+本项目的实现：
+
+| 文件 | 职责 |
+|---|---|
+| `next/lib/enoki/sponsor.ts` | `EnokiClient` + allowlist，**仅服务端** |
+| `next/app/api/sponsor/route.ts` | ② 造赞助交易，3 req/min/IP |
+| `next/app/api/sponsor/execute/route.ts` | ③ 提交签名 |
+| `next/lib/sui/useSignAndExecuteTransaction.ts` | 把三步包成一个 hook，调用方无感 |
+
+调用方代码不变，仍然是一行：
 
 ```tsx
 import { Transaction } from '@mysten/sui/transactions';
-import { useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { useSignAndExecuteTransaction } from '@/lib/sui/useSignAndExecuteTransaction';
 
 const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
 const tx = new Transaction();
 tx.moveCall({
-  target: `${process.env.NEXT_PUBLIC_PACKAGE_ID}::verdict::submit_verdict`,
+  target: `${process.env.NEXT_PUBLIC_PACKAGE_ID}::registry::create_verdict`,
   arguments: [/* ... */],
 });
 
-const { digest } = await signAndExecute({ transaction: tx });
+const { digest, createdObjects } = await signAndExecute({ transaction: tx });
 ```
 
-只要 target 在 Step 2.4 的 allowlist 里，**gas 由 Enoki 代付，用户余额始终为 0**。
+注意 import 的是 `@/lib/sui/useSignAndExecuteTransaction`，**不是** dapp-kit 的同名 hook —— 后者既走已停服的 JSON-RPC，也不赞助。
 
-这就是流程图里「gas sponsored, user pays 0」那一格的全部实现量 —— 除 Step 2.4 之外不需要写任何赞助逻辑。
-
-> 官方文档里那套后端 `transaction-blocks/sponsor` 两步流程，是给「不使用 Enoki 钱包但仍要赞助」的场景准备的。**本项目不需要，别看那一页。**
+**怎么确认赞助真的生效**：`GET /api/health` 会验证 private key 和 allowlist；真正的证据是交易详情里 gas payer 不是用户地址（验收标准第 5 条）。
 
 ---
 
@@ -317,3 +354,16 @@ NEXT_PUBLIC_SUI_NETWORK=testnet
 6. 同一个 Google 账号重新登录，得到**同一个**地址
 
 第 3 和第 5 条同时成立，才说明赞助真的生效了。
+
+---
+
+## 重新部署 Move 包时的 checklist（P1 #10）
+
+`sui client publish` 每跑一次就换一个 `PACKAGE_ID`，四个地方必须同步，漏一个赞助就**静默失效**：
+
+1. `next/.env` 的 `NEXT_PUBLIC_PACKAGE_ID`（注意是 `next/.env`，不是仓库根目录那个 —— Next.js 只读前者）
+2. Enoki Portal → private key → allowlist：`0x新PACKAGE_ID::registry::create_verdict`
+3. 重启 dev server（`NEXT_PUBLIC_*` 在编译期被内联，改了 `.env` 不重启不生效）
+4. `curl http://localhost:3400/api/health` —— `movePackage` 那一项会把该填进 Portal 的完整字符串原样打出来，直接复制
+
+第 4 步 5 秒，能挡掉第 2 步漏做的情况。
