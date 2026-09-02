@@ -1,15 +1,23 @@
 # Redeploy checklist — run this every time the Move package is republished
 
 **Why this exists.** Republishing a Move package does not update it in place —
-Sui gives you a **brand-new `PACKAGE_ID`**. The Enoki Portal allowlist matches
-Move call targets as **exact strings**, so the moment the package ID changes,
-the old allowlist entry stops matching and **every sponsored transaction stops
-being sponsored**.
+Sui gives you a **brand-new `PACKAGE_ID`**. Enoki matches sponsored Move call
+targets as **exact strings**, so until every place that names the old package
+is updated, **sponsored transactions stop being sponsored**.
 
 The failure is silent and late: login still works, `/api/attest` still returns
 200, the confirm dialog still appears — and then `/api/sponsor` returns 502
 with "target not allowed" at the exact moment you are demoing. Nothing earlier
 in the flow warns you.
+
+> **Good news: there is no Enoki Portal step.** The sponsorship allowlist is
+> **not** Portal configuration — the Enoki app config has no such field (it
+> holds only `allowedOrigins`, `authenticationProviders`, `domains`).
+> `allowedMoveCallTargets` is a per-request argument to
+> `createSponsoredTransaction`, supplied by `allowedMoveCallTargets()` in
+> `lib/enoki/sponsor.ts` and derived from `NEXT_PUBLIC_PACKAGE_ID`. So the
+> allowlist **cannot drift** from the deployed package — update the env var and
+> rebuild, and it follows automatically. That makes this checklist short.
 
 Run every step, in order.
 
@@ -55,16 +63,15 @@ Update it **everywhere it exists** — local `next/.env` *and* the deployment
 environment (Vercel project settings). A local-only change means the deployed
 demo keeps using the dead package ID.
 
-## 4. Update the Enoki Portal allowlist
+## 4. The allowlist — nothing to do
 
-Portal → your app → **private** key → allowed Move call targets. Replace the
-old entry with:
+Skip this. It updates itself: `allowedMoveCallTargets()` builds
+`<PACKAGE_ID>::registry::create_verdict` from the env var you just changed, so
+step 3 already did it.
 
-```
-<new PACKAGE_ID>::registry::create_verdict
-```
-
-**Only that one.** Do **not** add `registry::challenge` — PRD FR-13 says
+The only reason to open `lib/enoki/sponsor.ts` is if you add a **new sponsored
+entry function** to the contract. If you do, note what is deliberately absent:
+`registry::challenge` is **not** allowlisted, and must not be. PRD FR-13 says
 challenges are signed by the user's own wallet and self-paid
 ("不接 zkLogin、不接 sponsored tx"). Sponsoring it would pay for transactions
 the product says users pay for themselves, and widen the gas-drain surface
@@ -90,8 +97,9 @@ curl -sk https://localhost:3400/api/health | python3 -m json.tool
 ```
 
 Every check must be `ok: true`. The `movePackage` check prints the exact
-allowlist string — **diff it by eye against what you pasted into the Portal**.
-That one comparison is the whole point of this checklist.
+target the sponsor will accept and confirms that package exists on-chain. If it
+still shows the **old** package ID, the rebuild in step 5 didn't happen —
+that's the failure this checklist exists to catch.
 
 ## 7. Smoke-test the real path
 
