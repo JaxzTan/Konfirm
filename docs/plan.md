@@ -15,7 +15,7 @@ Owns: Google Cloud Console, Enoki Portal, `.env` secrets, and undoing the backen
 | 1 | Google Cloud Console: create OAuth web client, add `http://localhost:3400` + prod domain to Authorized JS origins and redirect URIs, add all demo Google accounts to Test users | Enoki_setup.md §1 | — |
 | 2 | Enoki Portal: create app `konfirm` (never delete/recreate — salt is per-app, FR-11 identity stability), generate public + private API keys scoped to testnet | Enoki_setup.md §2.1–2.2 | 1 |
 | 3 | Register Google as an Auth Provider in the Portal using the client ID from #1 | Enoki_setup.md §2.3 | 1, 2 |
-| 4 | Configure the sponsored-tx allowlist on the private key with the real `PACKAGE_ID::verdict::submit_verdict` / `add_challenge` targets once the Move package (TR-9) is deployed | Enoki_setup.md §2.4, TR-9, TR-13 | Move package deploy |
+| 4 | Configure the sponsored-tx allowlist on the private key with **only** `PACKAGE_ID::registry::create_verdict` once the Move package (TR-9) is deployed. Do **not** allowlist `registry::challenge`: PRD FR-13 says challenge is signed by P3's own wallet, self-paid — "不接 zkLogin、不接 sponsored tx". Sponsoring it would both contradict FR-13 and widen the gas-drain surface that #8 exists to close | Enoki_setup.md §2.4, TR-9, TR-13, FR-13 | Move package deploy |
 | 5 | Fill `.env`: `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, `NEXT_PUBLIC_ENOKI_API_KEY`, `ENOKI_SECRET_KEY` (server-only, never `NEXT_PUBLIC_`) | NFR-2 | 2 |
 | 6 | **Remove** `app/api/enoki/sponsor`, `app/api/enoki/execute`, `lib/enoki/server.ts`, `lib/enoki/sponsoredTransaction.ts` — this manual `EnokiClient` round trip is the flow Enoki_setup.md says to skip; sponsorship should be automatic via the Portal allowlist (#4) once the sender is an Enoki-wallet account | Enoki_setup.md §5 (explicit warning) | 4 |
 | 7 | Confirm `/api/attest` (FR-9, FR-12) builds the transaction and calls `useSignAndExecuteTransaction` directly, gas paid by the sponsor account, no custom sponsor endpoint in between | TR-12, TR-13, FR-12 | 6, Move package |
@@ -49,7 +49,7 @@ Run in order; stop and fix on first failure — do not proceed past a broken ste
 | 1 | `<GoogleLogin />` opens the Google popup | P2 |
 | 2 | After login, `useCurrentAccount()` returns a `0x...` address | P2 |
 | 3 | That address shows **0 SUI** balance on Sui testnet explorer | P1 |
-| 4 | Calling the real entry function (e.g. `submit_verdict`) returns a digest | P1 + P2 |
+| 4 | Calling the real entry function (e.g. `registry::create_verdict`) returns a digest | P1 + P2 |
 | 5 | Transaction details show the gas payer is **not** the user address | P1 |
 | 6 | Same Google account, logged in again, returns the **same** address | P2 |
 
