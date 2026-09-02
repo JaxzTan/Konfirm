@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { NextIntlClientProvider, useTranslations } from "next-intl";
+import { Transaction } from "@mysten/sui/transactions";
 
 import { AccountBadge } from "@/app/components/AccountBadge";
 import { GoogleLogin } from "@/app/components/GoogleLogin";
 import { useKonfirmIdentity } from "@/lib/signer";
+import { useSignAndExecuteTransaction } from "@/lib/sui/useSignAndExecuteTransaction";
+import { computeClaimHash } from "@/lib/attest/claimHash";
 import enMessages from "@/messages/en.json";
 import bmMessages from "@/messages/bm.json";
 import zhMessages from "@/messages/zh.json";
@@ -34,6 +37,7 @@ function HomeContent({
 }) {
   const t = useTranslations("Home");
   const { isSignedIn } = useKonfirmIdentity();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
   const [mode, setMode] = useState<"text" | "link" | "photo">("text");
   const [text, setText] = useState("");
@@ -42,7 +46,9 @@ function HomeContent({
   const [showResult, setShowResult] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [needsLogin, setNeedsLogin] = useState(false);
+  const [needsConfirm, setNeedsConfirm] = useState(false);
   const [isAttesting, setIsAttesting] = useState(false);
+  const [attestError, setAttestError] = useState<string | null>(null);
   const [objectId, setObjectId] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
 
@@ -69,7 +75,9 @@ function HomeContent({
   const resetResult = () => {
     setShowResult(false);
     setNeedsLogin(false);
+    setNeedsConfirm(false);
     setIsAttesting(false);
+    setAttestError(null);
     setObjectId(null);
     setResult(null);
     setText("");
@@ -99,7 +107,13 @@ function HomeContent({
 
       const data = await checkText(claimText);
       setResult(data);
-      setNeedsLogin(true); // login is what triggers the on-chain save, not a separate step
+      // Already logged in from an earlier claim: skip straight to the
+      // confirm step instead of re-prompting for a login that already happened.
+      if (isSignedIn) {
+        setNeedsConfirm(true);
+      } else {
+        setNeedsLogin(true);
+      }
     } catch (error) {
       console.error("Error checking claim:", error);
       alert("Something went wrong — check the console for details.");
@@ -108,19 +122,68 @@ function HomeContent({
     }
   };
 
-  // Sign-in is real now (Enoki zkLogin, see <GoogleLogin />). The attestation
-  // below is still a mock: it needs the Move package deployed for a real
-  // PACKAGE_ID, then /api/attest + useSignAndExecuteTransaction.
-  // TODO(P1 #7, P2 #4): replace the timeout with the sponsored transaction.
+  // Enoki signs with no wallet confirmation popup (Enoki_setup.md gotcha
+  // #1) — this screen is the only point where the user explicitly agrees
+  // before a real, gas-sponsored on-chain write happens.
+  useEffect(() => {
+    if (needsLogin && isSignedIn) {
+      setNeedsLogin(false);
+      setNeedsConfirm(true);
+    }
+  }, [needsLogin, isSignedIn]);
+
   const handleAttest = async () => {
-    setNeedsLogin(false);
+    setNeedsConfirm(false);
+    setAttestError(null);
     setIsAttesting(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 1800));
-    setObjectId(`demo-${Date.now()}`);
+    try {
+      const claimHash = await computeClaimHash(text, lang);
 
-    setIsAttesting(false);
-    setShowResult(true);
+      const attestResponse = await fetch("/api/attest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang, result }),
+      });
+      if (!attestResponse.ok) {
+        const body = await attestResponse.json().catch(() => ({}));
+        throw new Error(body.error ?? `/api/attest returned ${attestResponse.status}`);
+      }
+      const args = await attestResponse.json();
+
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${process.env.NEXT_PUBLIC_PACKAGE_ID}::registry::create_verdict`,
+        arguments: [
+          tx.pure.vector("u8", claimHash),
+          tx.pure.u8(args.lang),
+          tx.pure.u8(args.state),
+          tx.pure.u8(args.score),
+          tx.pure.u8(args.spreadLo),
+          tx.pure.u8(args.spreadHi),
+          tx.pure.u8(args.confidence),
+          tx.pure.u8(args.modelCount),
+          tx.pure.vector("string", args.models),
+          tx.pure.vector("string", args.requestIds),
+          tx.pure.string(args.traceBlob),
+          tx.object("0x6"), // Clock
+        ],
+      });
+
+      const { createdObjects } = await signAndExecute({ transaction: tx });
+      const verdict = createdObjects.find((o) => o.objectType.endsWith("::registry::Verdict"));
+      if (!verdict) {
+        throw new Error("Transaction succeeded but no Verdict object was created.");
+      }
+
+      setObjectId(verdict.objectId);
+      setShowResult(true);
+    } catch (error) {
+      console.error("Attest failed:", error);
+      setAttestError(error instanceof Error ? error.message : "Something went wrong.");
+    } finally {
+      setIsAttesting(false);
+    }
   };
 
   const modelWord = (count: number) => (count === 1 ? t("model") : t("models"));
@@ -167,7 +230,7 @@ function HomeContent({
         <p className="text-gray-300 text-sm max-w-md mx-auto">{t("heroSub")}</p>
       </div>
 
-      {!showResult && !isLoading && !needsLogin && !isAttesting && (
+      {!showResult && !isLoading && !needsLogin && !needsConfirm && !isAttesting && !attestError && (
         <div className="max-w-3xl mx-auto px-4 sm:px-8 py-8 sm:py-10">
           <p className="font-mono text-xs uppercase tracking-widest text-gray-500 mb-4">{t("whatToCheck")}</p>
 
@@ -255,32 +318,61 @@ function HomeContent({
         <div className="max-w-md mx-auto px-4 sm:px-8 py-12 sm:py-16 text-center">
           <h2 className="font-serif text-2xl font-bold text-gray-900 mb-3">{t("loginGateTitle")}</h2>
           <p className="text-gray-600 text-sm leading-relaxed mb-8">{t("loginGateBody")}</p>
-          {/* Exactly one of these is ever visible: <GoogleLogin /> renders
-              null once an account exists, and the attest button is gated on
-              the same condition. Signing in no longer attests by itself —
-              the user gets a beat to see they're signed in and choose to
-              publish, which is the seed of the P2 #3 confirm step. */}
+          {/* Only the login button lives here now — once signed in this
+              screen hands off to the dedicated confirm-before-sign step
+              below, rather than also housing the attest action itself. */}
           <GoogleLogin
             labels={{ signIn: t("continueGoogle"), unavailable: t("signInUnavailable") }}
             className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-2xl px-6 py-4 font-bold text-base text-gray-900 shadow-sm hover:shadow-md transition disabled:opacity-60"
           />
-          {isSignedIn && (
-            <button
-              onClick={handleAttest}
-              className="w-full flex items-center justify-center gap-3 bg-[#0f2e23] rounded-2xl px-6 py-4 font-bold text-base text-white shadow-sm hover:shadow-md transition"
-            >
-              {t("attestAndShare")}
-            </button>
-          )}
         </div>
       )}
 
-      {/* mock save; TODO wire to real /api/attest */}
+      {/* Enoki fires the transaction with no wallet popup — this click is
+          the only place the user explicitly agrees before it's on-chain. */}
+      {needsConfirm && (
+        <div className="max-w-md mx-auto px-4 sm:px-8 py-12 sm:py-16 text-center">
+          <h2 className="font-serif text-2xl font-bold text-gray-900 mb-3">{t("confirmTitle")}</h2>
+          <p className="text-gray-600 text-sm leading-relaxed mb-8">{t("confirmBody")}</p>
+          <button
+            onClick={handleAttest}
+            className="w-full bg-[#1f4d3d] text-white rounded-2xl py-4 font-bold text-base mb-3"
+          >
+            {t("confirmButton")}
+          </button>
+          <button
+            onClick={resetResult}
+            className="w-full border border-gray-300 rounded-2xl py-4 font-bold text-base text-gray-900"
+          >
+            {t("cancelButton")}
+          </button>
+        </div>
+      )}
+
       {isAttesting && (
         <div className="max-w-3xl mx-auto px-4 sm:px-8 py-20 text-center">
           <div className="w-12 h-12 border-4 border-gray-300 border-t-[#1f4d3d] rounded-full animate-spin mx-auto mb-6"></div>
           <p className="font-semibold text-lg text-gray-900">{t("attestingTitle")}</p>
           <p className="text-gray-500 text-sm">{t("attestingSub")}</p>
+        </div>
+      )}
+
+      {attestError && (
+        <div className="max-w-md mx-auto px-4 sm:px-8 py-12 sm:py-16 text-center">
+          <h2 className="font-serif text-2xl font-bold text-gray-900 mb-3">{t("attestErrorTitle")}</h2>
+          <p className="text-gray-600 text-sm leading-relaxed mb-8">{attestError}</p>
+          <button
+            onClick={handleAttest}
+            className="w-full bg-[#1f4d3d] text-white rounded-2xl py-4 font-bold text-base mb-3"
+          >
+            {t("retry")}
+          </button>
+          <button
+            onClick={resetResult}
+            className="w-full border border-gray-300 rounded-2xl py-4 font-bold text-base text-gray-900"
+          >
+            {t("checkAnother")}
+          </button>
         </div>
       )}
 

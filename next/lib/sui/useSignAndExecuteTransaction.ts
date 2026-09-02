@@ -15,6 +15,8 @@ type UseSignAndExecuteTransactionResult = {
   digest: string;
   bytes: string;
   signature: string;
+  /** Object IDs created by this transaction, keyed by their Move type. */
+  createdObjects: { objectId: string; objectType: string }[];
 };
 
 /**
@@ -65,6 +67,7 @@ export function useSignAndExecuteTransaction(
       const result = await suiClient.core.executeTransaction({
         transaction: fromBase64(bytes),
         signatures: [signature],
+        include: { effects: true, objectTypes: true },
       });
 
       if (result.$kind === 'FailedTransaction') {
@@ -72,7 +75,12 @@ export function useSignAndExecuteTransaction(
         throw new Error(`Transaction failed: ${status.success ? 'unknown error' : status.error.message}`);
       }
 
-      return { digest: result.Transaction.digest, bytes, signature };
+      const { effects, objectTypes } = result.Transaction;
+      const createdObjects = (effects?.changedObjects ?? [])
+        .filter((obj) => obj.idOperation === 'Created')
+        .map((obj) => ({ objectId: obj.objectId, objectType: objectTypes?.[obj.objectId] ?? '' }));
+
+      return { digest: result.Transaction.digest, bytes, signature, createdObjects };
     },
     ...options,
   });
