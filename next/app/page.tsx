@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { NextIntlClientProvider, useTranslations } from "next-intl";
-import { GoogleLogin } from "./components/GoogleLogin";
 import { Transaction } from "@mysten/sui/transactions";
 
 import { AccountBadge } from "@/app/components/AccountBadge";
@@ -123,16 +122,59 @@ function HomeContent({
     }
   };
 
-  // Real Google sign-in now happens in <GoogleLogin>. Once connected, we
-  // still fall back to a mock attest — /api/attest (Walrus upload +
-  // sponsored tx) doesn't exist yet.
-  const handleAttestAfterLogin = async () => {
-    setNeedsLogin(false);
+  // Signing in is not consent to publish. Enoki fires the transaction with
+  // no wallet confirmation popup (Enoki_setup.md gotcha #1), so logging in
+  // hands off to the confirm screen rather than straight to the write.
+  useEffect(() => {
+    if (needsLogin && isSignedIn) {
+      setNeedsLogin(false);
+      setNeedsConfirm(true);
+    }
+  }, [needsLogin, isSignedIn]);
+
+  const handleAttest = async () => {
+    setNeedsConfirm(false);
+    setAttestError(null);
     setIsAttesting(true);
 
-    // TODO: replace with real /api/attest (Walrus upload + sponsored tx)
-    await new Promise((resolve) => setTimeout(resolve, 1800));
-    setObjectId(`demo-${Date.now()}`);
+    try {
+      const claimHash = await computeClaimHash(text, lang);
+
+      const attestResponse = await fetch("/api/attest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang, result }),
+      });
+      if (!attestResponse.ok) {
+        const body = await attestResponse.json().catch(() => ({}));
+        throw new Error(body.error ?? `/api/attest returned ${attestResponse.status}`);
+      }
+      const args = await attestResponse.json();
+
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${process.env.NEXT_PUBLIC_PACKAGE_ID}::registry::create_verdict`,
+        arguments: [
+          tx.pure.vector("u8", claimHash),
+          tx.pure.u8(args.lang),
+          tx.pure.u8(args.state),
+          tx.pure.u8(args.score),
+          tx.pure.u8(args.spreadLo),
+          tx.pure.u8(args.spreadHi),
+          tx.pure.u8(args.confidence),
+          tx.pure.u8(args.modelCount),
+          tx.pure.vector("string", args.models),
+          tx.pure.vector("string", args.requestIds),
+          tx.pure.string(args.traceBlob),
+          tx.object("0x6"), // Clock
+        ],
+      });
+
+      const { createdObjects } = await signAndExecute({ transaction: tx });
+      const verdict = createdObjects.find((o) => o.objectType.endsWith("::registry::Verdict"));
+      if (!verdict) {
+        throw new Error("Transaction succeeded but no Verdict object was created.");
+      }
 
       setObjectId(verdict.objectId);
       setShowResult(true);
@@ -276,7 +318,28 @@ function HomeContent({
         <div className="max-w-md mx-auto px-4 sm:px-8 py-12 sm:py-16 text-center">
           <h2 className="font-serif text-2xl font-bold text-gray-900 mb-3">{t("loginGateTitle")}</h2>
           <p className="text-gray-600 text-sm leading-relaxed mb-8">{t("loginGateBody")}</p>
-          <GoogleLogin label={t("continueGoogle")} onConnected={handleAttestAfterLogin} />
+          <GoogleLogin label={t("continueGoogle")} />
+        </div>
+      )}
+
+      {/* Enoki fires the transaction with no wallet popup — this click is
+          the only place the user explicitly agrees before it's on-chain. */}
+      {needsConfirm && (
+        <div className="max-w-md mx-auto px-4 sm:px-8 py-12 sm:py-16 text-center">
+          <h2 className="font-serif text-2xl font-bold text-gray-900 mb-3">{t("confirmTitle")}</h2>
+          <p className="text-gray-600 text-sm leading-relaxed mb-8">{t("confirmBody")}</p>
+          <button
+            onClick={handleAttest}
+            className="w-full bg-[#1f4d3d] text-white rounded-2xl py-4 font-bold text-base mb-3"
+          >
+            {t("confirmButton")}
+          </button>
+          <button
+            onClick={resetResult}
+            className="w-full border border-gray-300 rounded-2xl py-4 font-bold text-base text-gray-900"
+          >
+            {t("cancelButton")}
+          </button>
         </div>
       )}
 

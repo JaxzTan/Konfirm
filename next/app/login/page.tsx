@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { createTranslator } from "next-intl";
 
-import { AccountBadge } from "@/app/components/AccountBadge";
 import { GoogleLogin } from "@/app/components/GoogleLogin";
 import enMessages from "@/messages/en.json";
 import bmMessages from "@/messages/bm.json";
 import zhMessages from "@/messages/zh.json";
-import { GoogleLogin } from "@/app/components/GoogleLogin";
 
 const messagesByLocale = { en: enMessages, bm: bmMessages, zh: zhMessages };
 
