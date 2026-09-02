@@ -33,6 +33,14 @@ function EnokiWalletRegistration() {
         google: {
           clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? '',
         },
+        twitch: {
+          clientId: process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID ?? '',
+          // Pinned: the SDK otherwise defaults the redirect to the current
+          // page URL, so it would change per route and stop matching the URI
+          // registered in the Twitch console.
+          redirectUrl:
+            typeof window !== 'undefined' ? `${window.location.origin}/` : undefined,
+        },
       },
     });
 
