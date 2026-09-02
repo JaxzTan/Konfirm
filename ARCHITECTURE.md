@@ -17,10 +17,13 @@ Lightweight architecture doc (arc42-inspired, trimmed to project size). Update s
 
 ## 3. Context & Scope
 
-Single Next.js application, serving both UI and any API routes.
+Two independent parts, kept in separate top-level folders so the repo root stays clean:
+
+- `next/` — the Next.js application, serving both UI and any API routes
+- `move/` — the Sui Move package (`konfirm::registry`)
 
 ```
-Browser ── HTTP :3400 ──> Konfirm (Next.js App Router)
+Browser ── HTTP :3400 ──> Konfirm (Next.js App Router, in next/)
 ```
 
 <!-- TODO: confirm — any upstream/downstream services, databases, third-party APIs planned -->
@@ -37,15 +40,22 @@ Browser ── HTTP :3400 ──> Konfirm (Next.js App Router)
 Current structure:
 
 ```
-app/
-  layout.tsx        — root layout, <html>/<body> shell, metadata
-  page.tsx          — route "/" (Server Component)
-  page.spec.tsx     — smoke test for the home page
-  globals.css       — global styles, light/dark tokens
+next/
+  app/
+    layout.tsx        — root layout, <html>/<body> shell, metadata
+    page.tsx          — route "/" (Server Component)
+    page.spec.tsx     — smoke test for the home page
+    globals.css       — global styles, light/dark tokens
+    providers.tsx     — QueryClientProvider + WalletProvider + Enoki wallet registration
+  lib/sui/             — gRPC Sui client + custom sign/execute hook (see docs/wallet.md)
+  next.config.ts      — Next configuration
+  vitest.config.ts    — test runner (jsdom + React plugin)
+  vitest.setup.ts     — registers jest-dom matchers
+  package.json        — scoped to the Next.js app only
 
-next.config.ts      — Next configuration
-vitest.config.ts    — test runner (jsdom + React plugin)
-vitest.setup.ts     — registers jest-dom matchers
+move/
+  sources/registry.move — konfirm::registry Move package (Verdict, Challenge)
+  tests/                 — Move unit tests
 ```
 
 One route today. As features are added, prefer one folder per route segment under `app/`, colocating components, tests and styles with the route that owns them.
