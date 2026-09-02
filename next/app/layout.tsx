@@ -34,8 +34,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       lang="en"
       className={`${fraunces.variable} ${plusJakartaSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        <Providers>{children}</Providers>
+      <body className="min-h-full flex justify-center bg-[#1a1a1a]">
+        <div className="w-full max-w-[440px] min-h-full bg-[var(--background)] flex flex-col">
+          <Providers>{children}</Providers>
+        </div>
       </body>
     </html>
   );
