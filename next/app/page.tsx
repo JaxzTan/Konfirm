@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { NextIntlClientProvider, useTranslations } from "next-intl";
+import { GoogleLogin } from "./components/GoogleLogin";
 
 import enMessages from "@/messages/en.json";
 import bmMessages from "@/messages/bm.json";
@@ -104,11 +105,14 @@ function HomeContent({
     }
   };
 
-  const handleLoginAndAttest = async () => {
+  // Real Google sign-in now happens in <GoogleLogin>. Once connected, we
+  // still fall back to a mock attest — /api/attest (Walrus upload +
+  // sponsored tx) doesn't exist yet.
+  const handleAttestAfterLogin = async () => {
     setNeedsLogin(false);
     setIsAttesting(true);
 
-    // TODO: replace with real zkLogin + /api/attest (Walrus upload + sponsored tx)
+    // TODO: replace with real /api/attest (Walrus upload + sponsored tx)
     await new Promise((resolve) => setTimeout(resolve, 1800));
     setObjectId(`demo-${Date.now()}`);
 
@@ -242,12 +246,7 @@ function HomeContent({
         <div className="max-w-md mx-auto px-4 sm:px-8 py-12 sm:py-16 text-center">
           <h2 className="font-serif text-2xl font-bold text-gray-900 mb-3">{t("loginGateTitle")}</h2>
           <p className="text-gray-600 text-sm leading-relaxed mb-8">{t("loginGateBody")}</p>
-          <button
-            onClick={handleLoginAndAttest}
-            className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-2xl px-6 py-4 font-bold text-base text-gray-900 shadow-sm hover:shadow-md transition"
-          >
-            {t("continueGoogle")}
-          </button>
+          <GoogleLogin label={t("continueGoogle")} onConnected={handleAttestAfterLogin} />
         </div>
       )}
 

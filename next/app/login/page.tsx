@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { createTranslator } from "next-intl";
-import { FcGoogle } from "react-icons/fc";
 
 import enMessages from "@/messages/en.json";
 import bmMessages from "@/messages/bm.json";
 import zhMessages from "@/messages/zh.json";
+import { GoogleLogin } from "@/app/components/GoogleLogin";
 
 const messagesByLocale = { en: enMessages, bm: bmMessages, zh: zhMessages };
 
@@ -45,10 +45,7 @@ export default async function LoginPage({
           <h2 className="font-serif text-3xl font-bold mb-2 text-gray-900">{t("rightHeading")}</h2>
           <p className="text-gray-600 text-base mb-8">{t("rightSub")}</p>
 
-          <button className="w-full flex items-center gap-4 bg-white rounded-2xl px-6 py-5 font-bold text-base text-gray-900 shadow-sm hover:shadow-md transition">
-            <FcGoogle className="w-6 h-6" />
-            {t("continueGoogle")}
-          </button>
+          <GoogleLogin label={t("continueGoogle")} redirectTo={`/home?lang=${locale}`} />
         </div>
       </div>
     </div>
