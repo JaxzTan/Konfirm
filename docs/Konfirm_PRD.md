@@ -1,4 +1,4 @@
-# TRD: Konfirm
+# PRD: Konfirm
 
 | Field | Value |
 |---|---|
@@ -6,279 +6,159 @@
 | Status | Draft |
 | Version | 1.0 |
 | Last updated | 2026-08-29 |
-| Related PRD | PRD-konfirm.md |
+| Related TRD | TRD-konfirm.md |
+| Event | MUBA Hack 2026 · submit 09-05 · pitch 09-06 @ APU |
+| Target tracks | Gonka Router — AI For Society ($2,000) · Sui Foundation — AI × SUI ($1,500) |
 
 ---
 
-## 1. Overview & scope
+## 1. Problem statement
 
-一个 Next.js 单体应用,部署在 Vercel。服务端编排三次并行 GonkaRouter 推理并聚合成判决;用户选择存证时,完整 reasoning 上传 Walrus,判决摘要写成 Sui testnet 上的一个 shared `Verdict` object。**没有关系型数据库** —— 链是唯一的真相来源,Vercel KV 仅作缓存。
+在马来西亚,谣言和诈骗信息主要通过 WhatsApp 家族群和 Facebook 转发扩散,内容混着英文、马来文、中文和方言拼音,没有出处也没有日期。收到的人分两类:长辈相信并继续转发;年轻一辈知道是假的,却拿不出能说服长辈的东西,于是沉默。
 
-本文覆盖 PRD 的 FR-1 → FR-16 与 NFR-1 → NFR-9。
+现有渠道对这个场景全部失效。Sebenarnya.my 更新慢且只有马来文/英文;国际 fact-check 工具不认本地语境;而任何单一 AI 给出的「这是假的」本身也只是另一个无法被验证的断言 —— 长辈凭什么信一个聊天机器人,而不信认识三十年的老同学。
 
-**明确延后:** FR-13(challenge)合约与索引先做,前端提交入口视 M2 完成度决定;若 09-02 晚 M2 未跑通则整条砍掉,不影响主线。
-
----
-
-## 2. Architecture
-
-```mermaid
-graph TD
-    U[Browser · Next.js RSC + Tailwind] -->|POST /api/verdict| ORC[Verdict orchestrator<br/>Next.js route handler]
-    ORC --> KV[(Vercel KV<br/>claim-hash cache)]
-    ORC -->|3× parallel| GR[GonkaRouter<br/>DeepSeek · Kimi · MiniMax]
-    ORC --> AGG[Aggregator<br/>median + spread]
-    U -->|POST /api/attest| ATT[Attestation service]
-    ATT --> W[Walrus publisher<br/>testnet]
-    ATT -->|sponsored tx| SUI[Sui testnet<br/>package konfirm]
-    U -->|Google OAuth| ZK[zkLogin<br/>salt + prover]
-    ZK --> ATT
-    V[Public verify page] -->|read object| SUI
-    V -->|read blob| W
-    P3[P3 wallet] -->|challenge tx, self-paid| SUI
-```
-
-| Component | Responsibility |
-|---|---|
-| Web app | 输入页、判决页、公开验证页、卡片生成。App Router,判决页 client component,验证页 server component |
-| Verdict orchestrator | 正规化 → 缓存查询 → 语言侦测 → 三路并行推理 → 聚合 |
-| Aggregator | 纯函数,无 IO,单元测试覆盖 |
-| Attestation service | Walrus 上传 → 构造 tx → sponsor 签名 → 执行 |
-| Move package `konfirm` | `Verdict` / `Challenge` object 与 append-only 语义 |
-| Vercel KV | 仅缓存,TTL 24h,丢失不影响正确性 |
-
-部署目标:Vercel(单一 production 环境)。Move package 部署于 Sui testnet。
+**问题因此有两层:** 判断层(跨语言、本地语境的真伪判断)和信任层(判断结果本身必须能被第三方独立核实,而不是「再信我一次」)。目前没有工具同时解决这两层。
 
 ---
 
-## 3. Tech stack & rationale
+## 2. Goals & success metrics
 
-| Layer | Choice | Why | Alternative considered |
+| Goal | Metric | Target |
+|---|---|---|
+| G1 · 零门槛 | 从未用过钱包的人,从打开页面到看到完整判决所需时间与操作 | < 60 秒,0 次钱包安装,0 次 gas 支付 |
+| G2 · 可独立验证 | 已存证的判决中,能在 Sui explorer 查到对应 object 且 Gonka Request ID 可逐条对应的比例 | 100% |
+| G3 · 真正多语言 | EN / BM / 中文 各 10 条测试样本,判决返回语言与输入语言一致 | ≥ 9/10 每种语言 |
+| G4 · 现场可演示 | 评委临时提供一条未见过的信息,完成核查并存证的耗时 | < 90 秒 |
+
+---
+
+## 3. Out of scope for demo
+
+9 天、3 人、只有 1 人碰链。以下**明确不做**,任何人提出都拒绝:
+
+- ❌ WhatsApp bot、浏览器插件、移动 App —— 只做 web,链接分享出去即可
+- ❌ 用户账号系统、历史记录、收藏夹 —— zkLogin 只用于签名,不建用户表
+- ❌ 主网部署或任何真实资金 —— 赛制明令 = 立即取消资格
+- ❌ 社群投票、多数决、加权纠错、声誉系统、代币激励(FR-13 的 challenge **不是**这些,见下)
+- ❌ 自建爬虫抓新闻源 —— 依赖模型自身知识 + 用户提供的 URL 正文
+- ❌ 深色模式、多主题、动画打磨、SEO
+- ❌ 方言语音输入(广东话/福建话)—— 写进 pitch roadmap,不写进代码
+- ❌ Sui Payments & Stablecoins track —— 与本项目无共用代码,分兵两边都做不完
+
+---
+
+## 4. Target users & personas
+
+**P1 · Wei Jie,24 岁,KL 上班族(主要用户)**
+早上在家族群收到妈妈转发的「某某食物治糖尿病」。触发时刻:他想回复,但打不出让对方信服的那段话。
+
+**P2 · Auntie Lim,58 岁,中文 + 马来文阅读者(被说服的一方)**
+不装钱包,不懂 crypto,手机里只有 WhatsApp 和 Facebook。她不会主动来用 Konfirm —— 她是**被 P1 转发的那张卡片说服的人**。体验标准:点开就看得懂,字够大,语言对,不需要注册。
+
+**P3 · 社群管理员 / 校园媒体 / NGO(信任层与 challenge 的存在理由)**
+需要在自己的频道引用核查结果,也需要在结果错误时留下公开异议。触发时刻:有人质疑「你这个结论是不是后来改过」,或者他自己发现某条判决是错的。P3 是 power user,**有钱包**。
+
+---
+
+## 5. User stories & functional requirements
+
+### Epic A · 判断层(所有 AI 推理必须经 gonkarouter.io)
+
+| ID | User story | Prio | Acceptance criteria |
 |---|---|---|---|
-| Frontend | Next.js 15 (App Router) + TypeScript + Tailwind + shadcn/ui | 团队已熟;RSC 让验证页无需客户端 JS 即可读链 | Vite SPA — 验证页 SEO/OG 会差 |
-| Backend | Next.js route handlers | 前后同仓,9 天内不值得拆服务 | 独立 NestJS — 多一层部署 |
-| Database | 无 | 链即真相来源,不建用户表(PRD 第 3 节) | Postgres — 会引入「运营方可改」的攻击面 |
-| Cache | Vercel KV (Redis) | 按 claim hash 缓存判决,直接服务 NFR-3 | 内存缓存 — serverless 冷启动即失效 |
-| Auth | zkLogin (Google) | FR-11 的唯一实现路径 | 传统 OAuth + 托管钱包 — 违背 FR-11 精神 |
-| Chain | Sui testnet,Move | object model 让 verdict 自带 permalink(FR-10) | EVM — mapping 无法给出对象级 ID |
-| Storage | Walrus testnet | reasoning trace 太大不适合上链 | IPFS pin — 需自付 pinning,且非 Sui 生态 |
-| AI | GonkaRouter(DeepSeek / Kimi / MiniMax) | 赛制强制;三模型交叉验证是 FR-3 | 直连模型厂商 — 违反 Gonka track 要求 |
-| Hosting | Vercel | 零配置、预览环境、KV 同厂 | Cloudflare Workers — Next.js 适配更折腾 |
+| FR-1 | 作为 P1,我要能直接粘贴整段转发文字或一条 URL,不用先整理格式 | Must | · 输入框接受 ≥ 2000 字纯文本<br>· 输入 URL 时自动抓取正文再核查 |
+| FR-2 | 作为 P2,我要判决用我输入的语言回给我 | Must | · 自动侦测 EN / BM / 中文<br>· 判决全文、理由、卡片文案统一使用该语言 |
+| FR-3 | 作为 P3,我要知道结论是多个模型交叉验证出来的,不是一家之言 | Must | · 每次核查并行调用 ≥ 3 个模型<br>· 全部经由 GonkaRouter |
+| FR-4 | 作为 P1,我要一个一眼能看懂的 Truth Score,而且模型意见不一致时它要诚实说出来 | Must | · 输出 0–100 分 + 模型分歧区间<br>· 模型跨界分歧时**不显示分数**,改显示两方立场<br>· 多数模型判定「无法查证」时不显示分数 |
+| FR-5 | 作为 P3,我要看到每个模型各自的推理,以及它们在哪里产生分歧 | Must | · 逐模型展开 reasoning<br>· 标出各模型危险信号标注的差集 |
+| FR-6 | 作为评审,我要看到 Gonka Request ID,以证明推理确实跑在 Gonka 上 | Must | · 每次调用的 Request ID 显示在 UI 并写入链上记录 |
+| FR-7 | 作为 P1,我要看到这条信息为什么像假的,而不只是一个分数 | Should | · 输出 3–5 条可读的危险信号标签(无出处 / 无日期 / 情绪化措辞 / 要求转发等) |
 
----
+### Epic B · 信任层(Sui 是核心,不是外挂)
 
-## 4. Data model
-
-### 4.1 On-chain(Sui Move,append-only)
-
-```move
-module konfirm::registry {
-    use std::string::String;
-
-    const STATE_VERDICT: u8 = 0;
-    const STATE_DISPUTED: u8 = 1;
-    const STATE_UNVERIFIABLE: u8 = 2;
-    const STATE_INSUFFICIENT: u8 = 3;
-    const NO_SCORE: u8 = 255;
-
-    public struct Verdict has key {
-        id: UID,
-        claim_hash: vector<u8>,     // 32B, sha256(normalize(text) || lang)
-        lang: u8,                   // 0=en 1=ms 2=zh
-        state: u8,
-        score: u8,                  // 0-100, 或 NO_SCORE
-        spread_lo: u8,
-        spread_hi: u8,
-        confidence: u8,             // 0=high 1=medium 2=n/a
-        model_count: u8,
-        models: vector<String>,
-        request_ids: vector<String>, // Gonka Request IDs (FR-6)
-        trace_blob: String,          // Walrus blob ID (FR-9)
-        challenge_count: u64,        // 唯一可变字段,只增不减
-        created_at_ms: u64,
-        attester: address,
-    }
-
-    public struct Challenge has key {
-        id: UID,
-        verdict_id: ID,
-        evidence_blob: String,
-        challenger: address,
-        created_at_ms: u64,
-    }
-
-    public struct VerdictCreated has copy, drop { verdict_id: ID, claim_hash: vector<u8> }
-    public struct Challenged     has copy, drop { verdict_id: ID, challenge_id: ID }
-}
-```
-
-**Entry functions —— 只有两个,没有 update,没有 delete:**
-
-| Function | 效果 |
-|---|---|
-| `create_verdict(...)` | 创建 `Verdict` 并 `transfer::share_object`,emit `VerdictCreated` |
-| `challenge(v: &mut Verdict, evidence_blob, clock, ctx)` | `v.challenge_count = v.challenge_count + 1`,创建并 share `Challenge`,emit `Challenged` |
-
-`Verdict` 必须是 shared object,否则任何人无法 challenge。可变性被限制在 `challenge_count` 单一字段,这是「append-only」在有状态对象上的具体定义 —— 要在 README 与 pitch 里写清楚。
-
-**链上不存原文**(NFR-4)。`claim_hash` 是原文指纹,任何人拿原文自己算一遍即可比对。
-
-### 4.2 Off-chain
-
-| Store | Key | Value | TTL |
+| ID | User story | Prio | Acceptance criteria |
 |---|---|---|---|
-| Vercel KV | `v:{claim_hash}` | 聚合后的 VerdictResult JSON | 24h |
-| Vercel KV | `rl:{ip}` | 速率计数 | 60s |
-| Walrus | blob | `{ models: [{model, requestId, verdict, score, redFlags, reasoning}] }`(PII 脱敏后) | 永久 |
+| FR-8 | 作为 P3,我要每条判决都是一个链上对象且事后无法修改 | Must | · Sui testnet 上创建 shared `Verdict` object:claim hash、语言、分数、状态、模型列表、Gonka Request IDs、时间戳、Walrus blob ID<br>· 合约无 update / delete entry;唯一可变字段是 `challenge_count`,且只能 +1 |
+| FR-9 | 作为 P3,我要拿到完整推理原文而不只是摘要 | Must | · 完整 reasoning trace 存 Walrus<br>· blob ID 写入 Verdict object |
+| FR-10 | 作为任何人,我要能用一条链接独立复查某条判决,不需要信任 Konfirm 这个网站 | Must | · Verdict 的 **object ID 即 permalink**,无需另建短链服务<br>· 公开验证页无登录墙,展示链上字段 + Walrus 原文 + Sui explorer 直链 |
+| FR-11 | 作为 P2,我要用 Google 登录就能用,不要叫我装钱包 | Must | · zkLogin 登录<br>· 全流程不出现助记词、钱包安装、私钥字样 |
+| FR-12 | 作为 P2,我不要付任何手续费 | Must | · Sponsored transaction,用户端 gas = 0 |
+| FR-13 | 作为 P3,我要能对一条我认为错误的判决留下公开异议,而且这条异议同样删不掉 | Should | · 任何持钱包地址可提交 `Challenge`(指向 verdict + Walrus 证据 blob)<br>· Verdict 上的 `challenge_count` 与异议列表显示在验证页<br>· **无投票、无加权、无多数决、无声誉分** —— 纯 append-only 异议记录<br>· challenge 走普通钱包签名,不接 zkLogin、不接 sponsored tx |
 
----
+### Epic C · 分发层(产品能不能真的解决问题的关键)
 
-## 5. API design
-
-| Method | Path | Purpose | Auth | Maps to |
-|---|---|---|---|---|
-| POST | `/api/verdict` | 核查并返回聚合判决 | none(IP 限流) | FR-1 → FR-7 |
-| POST | `/api/attest` | Walrus 上传 + sponsored tx 创建 Verdict | zkLogin JWT | FR-8, FR-9, FR-11, FR-12 |
-| GET | `/v/[objectId]` | 公开验证页(RSC,直接读链) | none | FR-10, FR-15 |
-| POST | `/api/card` | 生成反驳卡片文案 / OG 图 | none | FR-14 |
-| GET | `/api/health` | Gonka 余额 + Sui faucet 余额,demo 前自查 | none | NFR-3 |
-
-Challenge 由前端用 `@mysten/dapp-kit` 直接构造并让 P3 自己的钱包签名,**不经服务端**,因此没有对应 endpoint(FR-13)。
-
-### `POST /api/verdict`
-
-```jsonc
-// request
-{ "input": "转发内容或 https://...", "type": "text" }
-
-// response
-{
-  "claimHash": "9f2b...",
-  "lang": "zh",
-  "state": "verdict",              // verdict | disputed | unverifiable | insufficient
-  "score": 18,                     // state !== "verdict" 时为 null
-  "spread": { "lo": 10, "hi": 25 },
-  "confidence": "high",            // high | medium | null
-  "modelCount": 3,
-  "redFlags": { "consensus": ["no_source", "urges_forwarding"], "disputed": ["no_date"] },
-  "models": [
-    { "model": "deepseek-v3", "requestId": "gnk_01H...", "verdict": "likely_false",
-      "score": 18, "redFlags": ["no_source","urges_forwarding"], "reasoning": "..." }
-  ],
-  "cached": false
-}
-```
-
-聚合规则(纯函数 `aggregate()`):`unverifiable` 过半 → `state=unverifiable`,不给分;其余取 **中位数**(n=3 时可容忍 1 个离群值,平均数不行);`spread = max - min`;`lo < 40 && hi > 60`(跨界)或 `spread > 40` → `state=disputed`,不给分;`n>=3 && spread<=20` → `high`,否则 `medium`;`n==2` 封顶 `medium`;`n<=1` → `insufficient`。
-
----
-
-## 6. Technical requirements
-
-| ID | Requirement | Implements | Notes |
+| ID | User story | Prio | Acceptance criteria |
 |---|---|---|---|
-| TR-1 | 输入正规化:trim、折叠空白、剥离零宽字符与 emoji,再 `sha256(text \|\| lang)` | FR-1, NFR-3 | 不做会让同一条谣言多一个句号就 cache miss,白烧额度 |
-| TR-2 | URL 分支用 Readability 抽正文,3s 超时,截断至 2000 字 | FR-1 | 见 TR-14 的 SSRF 防护 |
-| TR-3 | 语言侦测优先用启发式(CJK 字符占比 / BM 停用词表),不确定时才交给模型 | FR-2, NFR-3 | 省一次调用 |
-| TR-4 | 三语 prompt 模板,强制 JSON 输出,`temperature: 0` | FR-2, NFR-3 | temp=0 让同 claim 重跑可命中缓存 |
-| TR-5 | `Promise.allSettled` + 12s `AbortController`,**不用** `Promise.all` | FR-3, NFR-1, NFR-7 | `Promise.all` 一个模型挂就整批 reject |
-| TR-6 | `aggregate()` 为纯函数,含边界单元测试(n=1/2/3、跨界、全 unverifiable) | FR-4, NFR-7 | 唯一必须自动化测试的模块 |
-| TR-7 | `redFlags` 为固定枚举;分歧点 = 各模型标注的对称差集,**不额外调用 LLM** | FR-5, FR-7, NFR-3 | 免费拿到 FR-5 的分歧定位 |
-| TR-8 | Request ID 从 GonkaRouter response header/body 透传至 UI 与链上 | FR-6 | 评委验证 Gonka 使用的唯一凭证 |
-| TR-9 | Move package `konfirm::registry`,两个 entry function,无 update/delete | FR-8, FR-13 | 部署地址写入 README(NFR-9) |
-| TR-10 | Walrus 上传前跑 PII 脱敏正则:大马手机(`\+?60\d{8,9}`)、IC(`\d{6}-\d{2}-\d{4}`)、email | FR-9, NFR-4 | reasoning 可能复述原文中的个资 |
-| TR-11 | 验证页为 server component,直连 fullnode 读 object,不经自家 API | FR-10 | 「不需要信任 Konfirm」的字面实现 |
-| TR-12 | zkLogin:ephemeral keypair 存 `sessionStorage`,salt 走托管 service,永不落盘 | FR-11, NFR-2 | fallback 见 R-1 |
-| TR-13 | Sponsor 账户 testnet SUI 由 faucet 供给;按 IP + claim_hash 双重限流 | FR-12, NFR-2 | 防 sponsor 余额被刷干 |
-| TR-14 | URL 抓取阻断私有网段与非 http(s) scheme;所有输入长度硬上限 2000 字 | NFR-2, NFR-3 | SSRF 是本项目唯一的服务端注入面 |
-| TR-15 | 判决页最小 16px;结论用大字 + 色块 + 文字三重表达;`disputed` 状态不渲染分数组件 | FR-4, NFR-5 | 色盲可读 |
-| TR-16 | 降级横幅:`modelCount < 3` 时在判决页与卡片上都显示「仅 N 个模型参与」 | NFR-7 | 卡片上也要显示,否则转发出去就丢失了这个信息 |
-| TR-17 | 卡片文案模板按语言分三套,语气规则写进 prompt:陈述证据,不评价转发者 | FR-14, NFR-6 | |
-| TR-18 | 分享:`navigator.share` 可用则用,否则回落复制按钮 | FR-16 | iOS Safari / Android Chrome 各测一次 |
+| FR-14 | 作为 P1,我要一张可以直接转发回家族群的反驳卡片,语气礼貌、不让长辈下不了台 | Must | · 生成图片或格式化文本<br>· 语言 = 原信息语言<br>· 语气模板:不指责转发者,只陈述证据 |
+| FR-15 | 作为 P2,我点卡片上的链接要能看到完整判决,不需要注册 | Must | · 卡片附 verdict object 链接 → FR-10 验证页<br>· 该页面无登录墙 |
+| FR-16 | 作为 P1,我要能一键复制/分享到 WhatsApp | Should | · Web Share API + 复制按钮双通道 |
+
+**Could(有余力才做):** 常见谣言样本库一键试用(降低评委上手成本)· 验证页 OG image 预览
+**Won't:** 见第 3 节
 
 ---
 
-## 7. Security & compliance
+## 6. User flow
 
-**Secrets.** Gonka API key、sponsor 私钥、Walrus publisher 凭证全部只存 Vercel 环境变量,永不出现在客户端 bundle 或 repo。提交前跑 `gitleaks` 扫一次全历史(NFR-2、NFR-9)。
+**最重要的一屏是判决结果页。** 它同时服务三个人 —— P1 判断要不要转发、P2 被说服、P3 验证真伪。这一屏做砸,整个产品的说服力归零。
 
-**Auth.** zkLogin 为唯一用户身份来源。Ephemeral keypair 只存 `sessionStorage`,随标签页关闭消失。服务端在 `/api/attest` 校验 JWT 与 nonce 绑定,防止他人借用 sponsor 额度。
+1. P1 打开 Konfirm(无需登录即可开始输入)
+2. 粘贴整段 WhatsApp 转发文字 → 点「Konfirm」
+3. 系统侦测语言 → 并行请求 3 个模型(GonkaRouter)→ 聚合
+4. **判决页**:Truth Score(或「模型分歧」/「无法查证」)+ 分歧区间 + 危险信号 + 逐模型 reasoning + Gonka Request IDs
+5. P1 点「存证 & 分享」→ zkLogin(Google)→ sponsored tx 创建 Verdict object,trace 上 Walrus
+6. 生成反驳卡片(原语言)→ 一键分享回家族群
+7. P2 在群里点开链接 → 公开验证页,无需登录 → 看懂结论
+8. P3 从同一页面点进 Sui explorer 独立核对;若判决有误,连钱包提交 Challenge
 
-**Custody.** Konfirm **不托管任何资产**,不发行代币,不进行价值转移。Sponsor 账户只持有 testnet SUI(无价值)。因此不触及 BNM / SC 任何牌照范围(NFR-8)—— 在 README 与 pitch 各写一次。
-
-**输入验证.** 长度上限 2000 字;URL 仅允许 http/https 且解析后 IP 不在 RFC1918 / loopback / link-local 段;所有模型输出按 schema 校验后才进入聚合。
-
-**限流.** `/api/verdict` 每 IP 10 次/分钟;`/api/attest` 每 IP 3 次/分钟。
-
-**PII.** 链上仅 32 字节 hash,不可能反推原文(NFR-4)。Walrus 上的 reasoning 经 TR-10 脱敏。用户原文不落任何持久化存储 —— KV 里存的是聚合结果,key 是 hash 而非原文。
-
----
-
-## 8. Infrastructure & environments
-
-两个环境:本地(`.env.local` + Sui testnet)和 production(Vercel)。关闭 preview deployment,避免 demo 当天点错 URL。
-
-CI:GitHub Actions 只跑两件事 —— `tsc --noEmit` 与 `aggregate()` 的单元测试。不做 Docker,不做 staging。
-
-可观测性:Vercel runtime logs 足够。额外加 `/api/health` 手动查 Gonka 余额与 sponsor 余额,列进 demo 前检查清单。
+> ⚠️ Assumption:步骤 5 放在判决之后而非之前,是为了让未登录用户也能完成核心体验(G1 的 60 秒目标)。上链只在用户要分享时触发。
 
 ---
 
-## 9. Testing strategy
+## 7. Non-functional requirements
 
-**自动化(仅一处):** `aggregate()` 的表驱动单元测试。这是唯一逻辑复杂到值得写测试的模块,也是最容易在演示时出错的地方。
-
-**Demo 前 smoke checklist(每次跑完整 3 遍):**
-
-1. 中文谣言 → 判决页语言正确 → 存证 → 验证页可开
-2. BM 谣言 → 同上
-3. EN 谣言 → 同上
-4. URL 输入 → 正文抓取成功
-5. 断开一个模型(改 env 指向错误 endpoint)→ 显示「仅 2 个模型参与」,横幅出现在卡片上
-6. 已核查过的 claim 重跑 → `cached: true`,秒回
-7. 陌生浏览器无痕开验证页 → 无登录墙,内容完整
-8. Sui explorer 直链点开 → object 字段与页面一致
-9. `/api/health` → Gonka 余额 > $5,sponsor 余额 > 1 SUI
-
----
-
-## 10. Risks & mitigations
-
-| Risk | Likelihood | Impact | Mitigation |
+| ID | Category | Requirement | Rationale |
 |---|---|---|---|
-| R-1 · zkLogin 在 9 天内接不通(salt/prover 链路复杂) | 中 | 高 —— FR-11/12 全挂 | 09-01 设死线。未通则回落:服务端单一 attester keypair 代签,`attester` 字段记为服务地址。牺牲「用户自签」,保留不可篡改与可验证,demo 照跑 |
-| R-2 · Walrus testnet 不可用或配额不足 | 中 | 中 —— FR-9 挂 | 回落 Vercel Blob 存 trace,链上 `trace_blob` 改存 `sha256(trace)`;完整性仍可验证,pitch 里说明这是 testnet 限制 |
-| R-3 · $20 Gonka 额度在 demo 前烧完 | 中 | 高 —— 现场直接挂 | TR-1 缓存 + 2000 字上限 + temp=0;`/api/health` 每天查;pitch 前一天起冻结压测;备录屏 |
-| R-4 · 某模型在 GonkaRouter 上返回非 JSON | 高 | 低 | schema 校验失败即当作该模型超时,走 NFR-7 降级路径 |
-| R-5 · 现场网络不稳,live demo 卡在 20 秒 | 中 | 高 | 手机热点备用 + 预先跑过的 claim 走缓存路径演示 + 完整录屏 |
-| R-6 · 评委认为 Sui 仍是 add-on | 中 | 高 —— 直接影响 track 得分 | verdict object ID 即 permalink(不另建短链)+ FR-13 challenge,两者都是「换成数据库就做不到」的性质;pitch 主动承认「上链不证明内容对,只证明没被改」 |
+| NFR-1 | Performance | 三模型并行调用,判决 p95 < 20 秒 | 串行会拖到 40 秒以上,现场 demo 死在这里(G4) |
+| NFR-2 | Security | Gonka API key 与 sponsor 私钥**只存服务端**,永不进客户端 bundle、永不进 public repo | public repo 泄 key,bot 几分钟内刷爆额度 |
+| NFR-3 | Cost | 全程只有 $20 Gonka credit:限制输入长度、按 claim hash 缓存、demo 前查余额 | 额度烧完 = 现场 demo 直接挂 |
+| NFR-4 | Privacy (PDPA) | 链上**只写 claim 的 hash,绝不写原文**;上传 Walrus 前对 reasoning 做 PII 脱敏 | 大马 PDPA 2010;转发内容常含姓名、电话、IC 号;上链不可删除,写错无法补救 |
+| NFR-5 | Accessibility | 判决页最小字号 16px;结论用大字 + 颜色 + 文字三重表达;禁用技术黑话 | P2 是 58 岁用户;色盲也要能读 |
+| NFR-6 | Localization | UI 与模型输出统一 EN / BM / 中文,日期用本地格式 | 多语言是本项目相对其他 fact checker 的核心差异 |
+| NFR-7 | Reliability | 任一模型超时/失败,仍以剩余模型出结果并**明确标注仅 N 个模型参与**;仅 1 个模型时不给分数 | 静默降级会破坏 FR-3 的诚实性;demo 当天网络不可控 |
+| NFR-8 | Regulatory | Konfirm **不涉及任何价值转移、代币发行或资金托管**,无 BNM / SC 牌照面 | 主动在 pitch 与 README 声明,避免被误判为金融应用;同时呼应赛制禁止主网真实资金 |
+| NFR-9 | Compliance (赛制) | Repo public;commit 起始 ≥ 2026-08-26;README 含 testnet package 地址;提交时声明所有使用过的 AI 工具 | 任一项缺失 = 直接 DQ,与技术无关 |
 
 ---
 
-## 11. Estimation & sequencing
+## 8. Assumptions & open questions
 
-**关键路径:** TR-5 → TR-6 → TR-9 → TR-12。这四项全在 Jaxz 身上,任何一项延误直接推迟 M2。
+**Assumptions(若为假则计划要改)**
 
-| # | 工作 | Owner | Size | Depends |
-|---|---|---|---|---|
-| 1 | Repo + Next.js 骨架 + Vercel 接上 | FE | S | — |
-| 2 | Gonka hello world,打出 Request ID | JZ | S | — |
-| 3 | Sui testnet hello world + faucet | JZ | S | — |
-| 4 | TR-1/3/4 正规化 + 语言侦测 + prompt 模板 | JZ | M | 2 |
-| 5 | TR-5 三路并行 + 降级 | JZ | M | 4 |
-| 6 | TR-6 `aggregate()` + 单测 | JZ | M | 5 |
-| 7 | 判决页 UI(TR-15/16) | FE | L | 1,6 |
-| 8 | 测试样本集 EN/BM/中文 各 10 条 + 人工标注 | PT | M | — |
-| 9 | TR-9 Move package + 部署 testnet | JZ | M | 3 |
-| 10 | TR-10 Walrus 上传 + 脱敏 | JZ | M | 9 |
-| 11 | TR-12/13 zkLogin + sponsored tx | JZ | **L** | 9 |
-| 12 | TR-11 公开验证页 | FE | M | 9 |
-| 13 | TR-17/18 卡片 + 分享 | FE | M | 7 |
-| 14 | FR-13 challenge(合约 + 前端) | JZ | M | 9,11 |
-| 15 | README / 视频 / AI 工具声明 | PT | M | 12 |
+- 队伍 3 人:Jaxz(backend + Move + 全部链上)+ 1 前端/设计 + 1 pitch/内容。队友 Web3 经验浅,**链上工作 100% 由 Jaxz 承担**,队友不碰 Sui SDK。赛制要求 2–4 人,达标。
+- Sui testnet 可被接受 —— 赛制明确要求提交 testnet 合约地址。
+- Gonka 的 "PREFERRED FACT CHECKER" 是加分项而非硬门槛,但我们照着做满(FR-1/3/4/5/6 逐条对应),不赌它是建议。
+- 同一 project 可在 Devfolio 同时投 Gonka 与 Sui 两个 track。
+- 上链只能证明「记录没被改过」,**不能证明内容是对的**。这一点必须在 pitch 与 README 主动承认 —— FR-13 的 challenge 正是对它的回应。
 
-**可并行:** 1/2/3 同日开工;8 与 4–6 无依赖,PT 可立即开始;7 与 9 分别由 FE / JZ 同时推进;12 与 11 无依赖,FE 可在 zkLogin 未完成时先用手动创建的 object 联调。
+**Open questions**
 
-**唯一的 L:** 第 11 项。它决定 M2 成败,R-1 的 09-01 死线就是为它设的。
+| 问题 | Owner | Decide by |
+|---|---|---|
+| Walrus testnet 的可用性与配额?失败时 fallback 走 Vercel Blob + 链上存 trace hash 是否可接受? | Jaxz | 08-31 Sui workshop |
+| zkLogin salt service 用 Mysten 托管还是自建?9 天内哪个风险低? | Jaxz | 08-31 |
+| Gonka 端 multi-model cross-verification 的最低模型数? | Jaxz | 08-30 |
+| Devfolio 上是一次提交打两个 track,还是交两份? | 队内 admin | 09-03 |
 
-**第 14 项(challenge)在第 11 项完成后才开工。** 09-03 功能冻结前没做完就砍掉,不进代码,只进 pitch roadmap。
+---
+
+## 9. Milestones
+
+| Milestone | Scope | Target |
+|---|---|---|
+| M1 · 判断层可单独 demo(不登录、不上链) | FR-1 → FR-7 | 08-31 |
+| M2 · 信任层端到端(zkLogin + 上链 + 验证页 + 卡片) | FR-8 → FR-12,FR-14 → FR-16 | 09-02 |
+| M3 · 功能冻结 + 线上 URL 稳定;FR-13 challenge 视余力并入 | 全部 Must | **09-03** |
+| M4 · 提交包(README / 视频 / AI 工具声明) | NFR-9 | 09-04 |
+| M5 · 白天提交 + Pitch 完整演练 ×5 | — | 09-05 |
