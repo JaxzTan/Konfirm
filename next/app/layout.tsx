@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Fraunces, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import {
+  Fraunces,
+  Plus_Jakarta_Sans,
+  JetBrains_Mono,
+  Noto_Serif_SC,
+} from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -14,6 +19,15 @@ const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta-sans",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700", "800"],
+});
+
+// Fraunces has no CJK glyphs, so zh headings would fall back to whatever the
+// OS happens to have. This keeps the serif brand voice in Chinese instead of
+// dropping to a sans fallback (handoff gap #2).
+const notoSerifSC = Noto_Serif_SC({
+  variable: "--font-noto-serif-sc",
+  subsets: ["latin"],
+  weight: ["600", "700"],
 });
 
 const jetbrainsMono = JetBrains_Mono({
@@ -32,7 +46,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${plusJakartaSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${fraunces.variable} ${plusJakartaSans.variable} ${jetbrainsMono.variable} ${notoSerifSC.variable} h-full antialiased`}
     >
       <body className="min-h-full flex justify-center bg-[#1a1a1a]">
         <div className="w-full max-w-[440px] min-h-full bg-[var(--background)] flex flex-col">
