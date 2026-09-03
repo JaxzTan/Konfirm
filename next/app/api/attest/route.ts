@@ -1,69 +1,97 @@
-import { NextRequest, NextResponse } from "next/server";
-import { redactDeep } from "@/lib/attest/redact";
-import { normalizeVerdictArgs } from "@/lib/attest/verdictArgs";
-import { uploadToWalrus } from "@/lib/attest/walrus";
-import { LANG_CODES, type Locale } from "@/lib/attest/lang";
-import { rateLimit } from "@/lib/rateLimit";
+// app/api/attest/route.ts
+// Order matters: scrub → hash → Walrus → build tx with blobId + hash → sign → execute.
+// If the tx fails after upload you get an orphan blob. Acceptable; never the reverse.
+import { NextResponse } from "next/server";
+import { Transaction } from "@mysten/sui/transactions";
+import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { fromHex } from "@mysten/sui/utils";
+import { prisma } from "@/lib/prisma";
+import { uploadTrace, scrubString } from "@/lib/walrus";
 
-// TR-13: 3 req/min/IP, tighter than /api/verdict's 10 — this is the
-// endpoint that ends in a real sponsored on-chain write, so it's the one
-// that could actually drain the sponsor's testnet SUI if abused.
-const LIMIT = 3;
-const WINDOW_MS = 60_000;
+const PKG = process.env.NEXT_PUBLIC_PACKAGE_ID!;
+const ATTESTER_CAP = process.env.ATTESTER_CAP_ID!;
+const client = new SuiClient({ url: getFullnodeUrl("testnet") });
+const attester = Ed25519Keypair.fromSecretKey(process.env.ATTESTER_PRIVATE_KEY!);
 
-// No zkLogin JWT check yet (TRD §"Auth" calls for verifying the JWT/nonce
-// binding here) — the client is trusted to only call this after a real
-// Enoki login, same "not silently decided" caveat create_verdict's own doc
-// comment raises about its own missing capability gate.
-export async function POST(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const limited = rateLimit(`attest:${ip}`, LIMIT, WINDOW_MS);
-  if (!limited.ok) {
-    return NextResponse.json(
-      { error: "Too many attest requests, try again shortly." },
-      { status: 429, headers: { "Retry-After": String(Math.ceil(limited.retryAfterMs / 1000)) } },
-    );
+export async function POST(req: Request) {
+  const { draftId, submittedBy } = (await req.json()) as {
+    draftId: string;
+    submittedBy: string; // zkLogin address from useKonfirmIdentity(); mock addr if hook not delivered
+  };
+
+  // 1. Load the cached verdict — never recompute, LLM output is non-deterministic
+  const draft = await prisma.draft.findUnique({ where: { id: draftId } });
+  if (!draft) return NextResponse.json({ error: "draft not found" }, { status: 404 });
+  if (draft.state !== "verdict" && draft.state !== "disputed") {
+    return NextResponse.json({ error: "state not attestable" }, { status: 400 });
   }
 
-  const body = await request.json();
-  const { lang, result } = body as { lang: Locale; result: any };
+  // 2. Walrus: scrub → canonical bytes → sha256 → PUT
+  const trace = {
+    v: 1,
+    claimHash: draft.claimHash,
+    lang: draft.lang,
+    state: draft.state,
+    score: draft.score,
+    spread: draft.spread,
+    confidence: draft.confidence,
+    redFlags: draft.redFlags,
+    models: draft.models, // includes gnk_ request IDs + per-model reasoning
+    computedAt: draft.createdAt.toISOString(),
+  };
+  const blob = await uploadTrace(trace);
 
-  if (!(lang in LANG_CODES) || !result?.state) {
-    return NextResponse.json({ error: "Missing or invalid lang/result." }, { status: 400 });
+  // 3. On-chain claim_text is permanent — scrub it with the same rules
+  const claimText = scrubString(draft.claimText).slice(0, 2000);
+
+  // 4. Build + sign + execute
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PKG}::verdict::submit_verdict`,
+    arguments: [
+      tx.object(ATTESTER_CAP),
+      tx.pure.vector("u8", fromHex(draft.claimHash)),
+      tx.pure.string(claimText),
+      tx.pure.u8(draft.score ?? 0),
+      tx.pure.string(draft.state),
+      tx.pure.string(blob.blobId),
+      tx.pure.vector("u8", fromHex(blob.traceHash)),
+      tx.pure.address(submittedBy),
+    ],
+  });
+
+  const result = await client.signAndExecuteTransaction({
+    signer: attester,
+    transaction: tx,
+    options: { showObjectChanges: true },
+  });
+
+  const verdict = result.objectChanges?.find(
+    (c) => c.type === "created" && c.objectType.endsWith("::verdict::Verdict"),
+  );
+  if (!verdict || verdict.type !== "created") {
+    return NextResponse.json({ error: "verdict object not found", digest: result.digest }, { status: 500 });
   }
 
-  const args = normalizeVerdictArgs(result);
-
-  // The full verdict, PII-redacted (TR-10) — this is the "complete reasoning
-  // trace" FR-9 wants archived, not just the on-chain summary fields.
-  const trace = redactDeep({ ...result, attestedAt: new Date().toISOString() });
-
-  const publisherUrl = process.env.WALRUS_PUBLISHER;
-  if (!publisherUrl) {
-    return NextResponse.json({ error: "WALRUS_PUBLISHER is not configured." }, { status: 500 });
-  }
-
-  let traceBlob: string;
-  try {
-    traceBlob = await uploadToWalrus(publisherUrl, trace);
-  } catch (error) {
-    // R-2 in the TRD's risk table: Walrus testnet being flaky is an
-    // anticipated failure mode, not a bug — surface it plainly rather than
-    // half-completing an attest with no trace.
-    console.error("Walrus upload failed:", error);
-    return NextResponse.json({ error: "Walrus upload failed — try again." }, { status: 502 });
-  }
+  // 5. Index off-chain
+  await prisma.verdict.create({
+    data: {
+      objectId: verdict.objectId,
+      draftId,
+      claimHash: draft.claimHash,
+      blobId: blob.blobId,
+      traceHash: blob.traceHash,
+      submittedBy,
+      digest: result.digest,
+    },
+  });
 
   return NextResponse.json({
-    traceBlob,
-    lang: LANG_CODES[lang],
-    state: args.state,
-    score: args.score,
-    spreadLo: args.spreadLo,
-    spreadHi: args.spreadHi,
-    confidence: args.confidence,
-    modelCount: args.modelCount,
-    models: args.models,
-    requestIds: args.requestIds,
+    objectId: verdict.objectId,
+    blobId: blob.blobId,
+    traceHash: blob.traceHash,
+    walrusStatus: blob.status,
+    digest: result.digest,
   });
 }

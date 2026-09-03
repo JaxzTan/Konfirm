@@ -13,5 +13,5 @@ certificates/
 *.traineddata
 AGENTS.md
 CLAUDE.md
-/history.md
+history.md
 package-lock.json
