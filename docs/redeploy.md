@@ -126,8 +126,10 @@ still succeeds, so this is the only way to catch it.
 
 - **Existing Verdict objects.** Objects created by the old package keep working
   and stay readable at `/v/[objectId]`. You are not migrating data.
-- **`NEXT_PUBLIC_REGISTRY_ID`.** Vestigial — `registry.move` has no `init()`
-  and no `Registry` struct, so nothing ever fills it.
+- **`NEXT_PUBLIC_REGISTRY_ID`.** Gone as of 2026-09-03. It was vestigial —
+  `registry.move` has no `init()` and no `Registry` struct, so nothing ever
+  filled it and nothing read it. Removed from `.env`, `.env.example` and the
+  Docker build args so it stops reading as an unfinished setup step.
 - **Google Cloud Console / auth providers.** Unrelated to the package ID.
 - **The Enoki app itself.** Never delete and recreate it — the zkLogin salt is
   per-app, so a new app gives every returning user a different address and
