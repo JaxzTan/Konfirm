@@ -2,6 +2,12 @@ import { render, screen } from '@testing-library/react';
 import Home from './page';
 import { GoogleLogin } from './components/GoogleLogin';
 
+// <GoogleLogin> calls useRouter() to honour its `redirectTo` prop; a bare
+// render has no router context.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 // The page reads dapp-kit hooks, which require a WalletProvider above them.
 // Mocking the hooks keeps this a plain render test instead of standing up the
 // real provider, which would try to register Enoki wallets over the network.
@@ -42,7 +48,7 @@ describe('GoogleLogin', () => {
     // for any provider — the real-world case is Enoki/Google not registered
     // yet (network hiccup, misconfigured Portal), covered directly here
     // rather than via Home's login-gate state.
-    render(<GoogleLogin labels={{ signIn: 'Continue with Google', unavailable: 'Sign-in is temporarily unavailable.' }} />);
+    render(<GoogleLogin label="Continue with Google" />);
     expect(screen.getByText('Sign-in is temporarily unavailable.')).toBeInTheDocument();
   });
 });

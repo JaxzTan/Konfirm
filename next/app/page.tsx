@@ -122,9 +122,9 @@ function HomeContent({
     }
   };
 
-  // Enoki signs with no wallet confirmation popup (Enoki_setup.md gotcha
-  // #1) — this screen is the only point where the user explicitly agrees
-  // before a real, gas-sponsored on-chain write happens.
+  // Signing in is not consent to publish. Enoki fires the transaction with
+  // no wallet confirmation popup (Enoki_setup.md gotcha #1), so logging in
+  // hands off to the confirm screen rather than straight to the write.
   useEffect(() => {
     if (needsLogin && isSignedIn) {
       setNeedsLogin(false);
@@ -318,13 +318,7 @@ function HomeContent({
         <div className="max-w-md mx-auto px-4 sm:px-8 py-12 sm:py-16 text-center">
           <h2 className="font-serif text-2xl font-bold text-gray-900 mb-3">{t("loginGateTitle")}</h2>
           <p className="text-gray-600 text-sm leading-relaxed mb-8">{t("loginGateBody")}</p>
-          {/* Only the login button lives here now — once signed in this
-              screen hands off to the dedicated confirm-before-sign step
-              below, rather than also housing the attest action itself. */}
-          <GoogleLogin
-            labels={{ signIn: t("continueGoogle"), unavailable: t("signInUnavailable") }}
-            className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-2xl px-6 py-4 font-bold text-base text-gray-900 shadow-sm hover:shadow-md transition disabled:opacity-60"
-          />
+          <GoogleLogin label={t("continueGoogle")} />
         </div>
       )}
 

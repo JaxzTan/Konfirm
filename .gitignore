@@ -10,6 +10,7 @@ certificates/
 .env.local
 *.log
 .DS_Store
+*.traineddata
 AGENTS.md
 CLAUDE.md
 history.md
