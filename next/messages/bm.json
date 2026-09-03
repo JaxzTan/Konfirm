@@ -72,7 +72,8 @@
   },
   "Verify": {
     "publicRecord": "Rekod Awam · Tiada log masuk diperlukan",
-    "resultFor": "Keputusan untuk",
+    "claimFingerprint": "Cap jari dakwaan",
+    "traceUnavailable": "Jejak penaakulan penuh tidak dapat dimuatkan buat masa ini. Rekod atas rantaian di bawah tidak terjejas.",
     "cantBeVerified": "Tidak Boleh Disahkan",
     "permanentRecordNote": "Ini adalah rekod kekal. Sesiapa sahaja boleh menyemaknya secara bebas — anda tidak perlu percayakan Konfirm.",
     "onlyModelsParticipated": "Hanya {count} {modelWord} mengambil bahagian dalam semakan ini",

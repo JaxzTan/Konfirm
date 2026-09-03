@@ -2,6 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createTranslator } from "next-intl";
 
+import {
+  fetchOnChainVerdict,
+  fetchTrace,
+  STATE_VERDICT,
+  STATE_DISPUTED,
+  STATE_INSUFFICIENT,
+} from "@/lib/sui/verdict";
 import enMessages from "@/messages/en.json";
 import bmMessages from "@/messages/bm.json";
 import zhMessages from "@/messages/zh.json";
@@ -19,74 +26,88 @@ type ModelResult = {
 
 type Verdict = {
   objectId: string;
-  state: "true" | "false" | "unavailable" | "insufficient";
+  state: "true" | "false" | "disputed" | "unavailable" | "insufficient";
   score: number | null;
+  /** Empty when the Walrus trace couldn't be read — the chain has no prose. */
   description: string;
-  claimText: string;
+  /** sha256(normalize(text) || lang). The claim text itself is stored nowhere. */
+  claimHashHex: string;
   modelCount: number;
   flags: string[];
   models: ModelResult[];
   challengeCount: number;
   createdAtMs: number;
+  /** False when Walrus was unreachable or the blob is gone. */
+  hasTrace: boolean;
 };
 
-const mockContent = {
-  en: {
-    claimText: "Bridge exploded reported near KL area.....",
-    description: "This claim does not match any verified sources.",
-    flags: ["No original source or date included", "Uses urgency language", "Claims a vague, unnamed source"],
-    models: [
-      { model: "DeepSeek", reasoning: "No credible source found supporting this claim." },
-      { model: "Kimi", reasoning: "Contradicts established government information." },
-      { model: "MiniMax", reasoning: "Found old timestamp on similar news, likely outdated." },
-    ],
-  },
-  bm: {
-    claimText: "Jambatan meletup dilaporkan berlaku berhampiran kawasan KL.....",
-    description: "Dakwaan ini tidak sepadan dengan mana-mana sumber yang disahkan.",
-    flags: ["Tiada sumber atau tarikh asal disertakan", "Menggunakan bahasa mendesak", "Mendakwa sumber yang samar dan tidak dinamakan"],
-    models: [
-      { model: "DeepSeek", reasoning: "Tiada sumber yang boleh dipercayai menyokong dakwaan ini." },
-      { model: "Kimi", reasoning: "Bercanggah dengan maklumat rasmi kerajaan." },
-      { model: "MiniMax", reasoning: "Menemui cap masa lama pada berita serupa, berkemungkinan lapuk." },
-    ],
-  },
-  zh: {
-    claimText: "有报道称吉隆坡地区附近发生桥梁爆炸.....",
-    description: "此说法与任何已核实的来源都不相符。",
-    flags: ["没有原始来源或日期", "使用紧急语气", "声称来自模糊、未具名的来源"],
-    models: [
-      { model: "DeepSeek", reasoning: "未找到可信来源支持此说法。" },
-      { model: "Kimi", reasoning: "与政府官方信息相矛盾。" },
-      { model: "MiniMax", reasoning: "发现类似新闻的旧时间戳，可能已过时。" },
-    ],
-  },
-} as const;
 
-// TODO: replace with a real Sui fullnode read; keep the return shape identical
-async function getVerdict(objectId: string, locale: Locale): Promise<Verdict | null> {
-  if (!objectId) return null;
+/**
+ * Splits the on-chain STATE_VERDICT into the page's "true"/"false" halves.
+ *
+ * The chain deliberately does not store that label — normalizeVerdictArgs maps
+ * both to STATE_VERDICT and keeps only the numeric score, so the label has to
+ * come back from somewhere. The Walrus trace carries the original string; the
+ * score threshold is the fallback for when the trace is unreadable.
+ */
+function displayState(state: number, score: number | null, traceState?: unknown): Verdict["state"] {
+  if (traceState === "true" || traceState === "false") return traceState;
 
-  const content = mockContent[locale];
-  const requestIds = ["gnk_01H8X3K9P2Q", "gnk_01H8X3K9Q4R", "gnk_01H8X3K9S7T"];
-  const scores = [18, 25, 26];
+  switch (state) {
+    case STATE_VERDICT:
+      return score !== null && score >= 50 ? "true" : "false";
+    case STATE_DISPUTED:
+      return "disputed";
+    case STATE_INSUFFICIENT:
+      return "insufficient";
+    default:
+      return "unavailable";
+  }
+}
+
+/**
+ * Reads the record from Sui, then enriches it from the Walrus trace.
+ *
+ * The split matters: everything the page treats as *evidence* — score, model
+ * count, request IDs, dispute count, timestamp — comes from the chain, which
+ * is the whole point of the product. The prose (description, key signals,
+ * per-model reasoning) exists only in the Walrus blob, because NFR-4 keeps
+ * text off-chain. If Walrus is down the record still renders, minus the prose.
+ */
+async function getVerdict(objectId: string): Promise<Verdict | null> {
+  const onChain = await fetchOnChainVerdict(objectId);
+  if (!onChain) return null;
+
+  const trace = await fetchTrace(onChain.traceBlob);
+
+  // Shape of a /api/verdict result, as archived by /api/attest.
+  const traceModels = Array.isArray(trace?.models)
+    ? (trace.models as { name?: string; score?: number; reasoning?: string; requestId?: string }[])
+    : [];
+  const reasoningByModel = new Map(
+    traceModels.map((m) => [m.name, { reasoning: m.reasoning ?? "", score: m.score ?? null }]),
+  );
 
   return {
-    objectId,
-    state: "false",
-    score: 25,
-    description: content.description,
-    claimText: content.claimText,
-    modelCount: 3,
-    flags: [...content.flags],
-    models: content.models.map((m, i) => ({
-      model: m.model,
-      requestId: requestIds[i],
-      score: scores[i],
-      reasoning: m.reasoning,
+    objectId: onChain.objectId,
+    state: displayState(onChain.state, onChain.score, trace?.state),
+    score: onChain.score,
+    description: typeof trace?.description === "string" ? trace.description : "",
+    claimHashHex: onChain.claimHashHex,
+    modelCount: onChain.modelCount,
+    flags: Array.isArray(trace?.flags) ? (trace.flags as string[]) : [],
+    // Driven by the on-chain models list, not the trace's: the chain is the
+    // record, and a mismatched trace must not add models that were never
+    // attested. requestIds is positional against models in create_verdict.
+    models: onChain.models.map((model, i) => ({
+      model,
+      requestId: onChain.requestIds[i] ?? "",
+      score: reasoningByModel.get(model)?.score ?? null,
+      reasoning: reasoningByModel.get(model)?.reasoning ?? "",
     })),
-    challengeCount: 0,
-    createdAtMs: Date.now() - 1000 * 60 * 60 * 3,
+    challengeCount: onChain.challengeCount,
+    createdAtMs: onChain.createdAtMs,
+    hasTrace: trace !== null,
   };
 }
 
@@ -111,7 +132,7 @@ export default async function VerifyPage({
   });
   const modelWord = (count: number) => (count === 1 ? t("model") : t("models"));
 
-  const verdict = await getVerdict(objectId, locale);
+  const verdict = await getVerdict(objectId);
 
   if (!verdict) notFound();
 
@@ -137,8 +158,11 @@ export default async function VerifyPage({
       <div className="max-w-3xl mx-auto px-4 sm:px-8 py-6 sm:py-10">
         <div className="rounded-2xl overflow-hidden border border-gray-300">
           <div className="bg-gradient-to-b from-[#0f2e23] to-[#1f4d3d] p-5 sm:p-8">
-            <p className="font-mono text-gray-400 text-xs uppercase tracking-widest mb-3">
-              {t("resultFor")}: &quot;{verdict.claimText}&quot;
+            {/* The claim text is stored nowhere — not on-chain (NFR-4) and not
+                in the Walrus trace. Its hash is what lets anyone re-check that
+                this record belongs to the message they were forwarded. */}
+            <p className="font-mono text-gray-400 text-xs uppercase tracking-widest mb-3 break-all">
+              {t("claimFingerprint")}: {verdict.claimHashHex.slice(0, 16)}…
             </p>
 
             {isScored && verdict.score !== null && (
@@ -172,7 +196,15 @@ export default async function VerifyPage({
             {!isScored && (
               <div className="mb-2">
                 <h1 className="text-white font-serif text-2xl font-bold mb-1">{t("cantBeVerified")}</h1>
-                <p className="text-gray-300 text-sm max-w-md">{verdict.description}</p>
+                {verdict.description && (
+                  <p className="text-gray-300 text-sm max-w-md">{verdict.description}</p>
+                )}
+              </div>
+            )}
+
+            {!verdict.hasTrace && (
+              <div className="bg-[#c98a3a]/20 border border-[#c98a3a]/40 rounded-lg px-4 py-2.5 mt-3">
+                <span className="text-[#f0d9a8] text-sm font-semibold">⚠ {t("traceUnavailable")}</span>
               </div>
             )}
 
@@ -192,23 +224,28 @@ export default async function VerifyPage({
           {isScored && (
             <div className="bg-white p-5 sm:p-8 border-b border-gray-200">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8">
-                <div>
-                  <p className="font-mono text-xs uppercase tracking-widest text-gray-500 mb-3">{t("keySignals")}</p>
-                  <div className="flex flex-col gap-2">
-                    {verdict.flags.map((flag, i) => (
-                      <div
-                        key={i}
-                        className={`border rounded-lg p-3 text-sm ${
-                          verdict.state === "true"
-                            ? "bg-[#edf7f0] border-[#cfe3d6] text-[#1f5738]"
-                            : "bg-[#fdf0ed] border-[#f2d5cc] text-[#6b3527]"
-                        }`}
-                      >
-                        {flag}
-                      </div>
-                    ))}
+                {/* Key signals live only in the Walrus trace, so this column
+                    drops out entirely rather than leaving a bare heading when
+                    the blob has expired. */}
+                {verdict.flags.length > 0 && (
+                  <div>
+                    <p className="font-mono text-xs uppercase tracking-widest text-gray-500 mb-3">{t("keySignals")}</p>
+                    <div className="flex flex-col gap-2">
+                      {verdict.flags.map((flag, i) => (
+                        <div
+                          key={i}
+                          className={`border rounded-lg p-3 text-sm ${
+                            verdict.state === "true"
+                              ? "bg-[#edf7f0] border-[#cfe3d6] text-[#1f5738]"
+                              : "bg-[#fdf0ed] border-[#f2d5cc] text-[#6b3527]"
+                          }`}
+                        >
+                          {flag}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div>
                   <p className="font-mono text-xs uppercase tracking-widest text-gray-500 mb-3">{t("whatEachModelFound")}</p>
@@ -223,7 +260,7 @@ export default async function VerifyPage({
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-gray-600 mb-2">{m.reasoning}</p>
+                        {m.reasoning && <p className="text-xs text-gray-600 mb-2">{m.reasoning}</p>}
                         <div className="border-t border-dashed border-gray-300 pt-1.5">
                           <span className="text-[10px] font-mono text-gray-400">
                             {t("requestId")}: {m.requestId}

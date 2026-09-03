@@ -72,7 +72,8 @@
   },
   "Verify": {
     "publicRecord": "公开记录 · 无需登录",
-    "resultFor": "核实对象",
+    "claimFingerprint": "说法指纹",
+    "traceUnavailable": "暂时无法加载完整推理记录。下方的链上记录不受影响。",
     "cantBeVerified": "无法核实",
     "permanentRecordNote": "这是一条永久记录。任何人都能独立核实——您无需信任 Konfirm。",
     "onlyModelsParticipated": "仅有 {count} 个{modelWord}参与本次核实",

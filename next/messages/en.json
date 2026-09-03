@@ -72,7 +72,8 @@
   },
   "Verify": {
     "publicRecord": "Public Record · No login needed",
-    "resultFor": "Result for",
+    "claimFingerprint": "Claim fingerprint",
+    "traceUnavailable": "The full reasoning trace could not be loaded right now. The on-chain record below is unaffected.",
     "cantBeVerified": "Can't Be Verified",
     "permanentRecordNote": "This is a permanent record. Anyone can check it independently — you don't have to trust Konfirm.",
     "onlyModelsParticipated": "Only {count} {modelWord} participated in this check",
