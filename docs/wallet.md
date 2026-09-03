@@ -55,11 +55,10 @@ flowchart TD
         P3SIGN --> CHALLENGE[(Challenge object<br/>verdict.challenge_count += 1)]
     end
 
-    VERDICT -.->|should be read by| VERIFY["/v/[objectId] verify page<br/>exists, but still serves mock data"]
-    CHALLENGE -.->|should be read by| VERIFY
+    VERDICT -.->|read by| VERIFY["/v/[objectId] verify page<br/>getObject + BCS decode,<br/>prose from the Walrus trace"]
+    CHALLENGE -.->|not read yet| VERIFY
 
     style P3CONNECT fill:#4a1010,color:#fff
-    style VERIFY fill:#4a1010,color:#fff
 ```
 
 Red boxes = missing or non-functional today.
@@ -87,20 +86,23 @@ deployed package.
    **not** in `allowedMoveCallTargets()`: P3 pays their own gas, so this is a
    standard wallet-standard connect, not Enoki. TRD marks it first-to-cut if
    `M2` (2026-09-02) isn't hit.
-2. **`/v/[objectId]` still serves mock data.** `getVerdict()` returns
-   `mockContent` and hardcodes `challengeCount: 0`; it never reads the chain.
-   The write path now produces real `Verdict` objects, so the verify page is
-   the last place the demo is still fictional — and it is the page a shared
-   link actually lands on.
-3. **Acceptance checks 3 and 5 unproven.** The user address showing 0 SUI, and
-   the gas payer not being the user, are the only real evidence sponsorship
-   works. Both need one real transaction inspected on the testnet explorer.
-   Everything else can look correct and still be silently unsponsored.
+2. **Acceptance check 6 unproven.** Same Google account, logged in again,
+   must return the *same* address (FR-11 identity stability). The four live
+   verdicts were signed by four distinct senders, so nothing on-chain shows a
+   repeat login. This one needs a browser: sign out, sign back in with the
+   same account, compare.
+3. **Walrus blobs expire on testnet.** One of the four live verdicts already
+   404s on its `trace_blob`, so its reasoning is gone for good while the
+   on-chain record remains. The page degrades correctly, but if the demo needs
+   its traces intact, the blobs have to be re-uploaded with more storage
+   epochs before judging.
 
 ### Closed since this doc was written
 
 | Was | Now |
 |---|---|
+| `/v/[objectId]` served mock data | Reads the chain via `lib/sui/verdict.ts`, enriched from Walrus |
+| Acceptance 3/4/5 unproven | Proven on testnet — see the evidence block below |
 | Enoki code unmerged | Merged into `dev` (`c8bb5d8`) and back into `feature/enoki-setup` |
 | Move package not deployed | Deployed to testnet, `move/Published.toml` |
 | `NEXT_PUBLIC_REGISTRY_ID` placeholder | Removed entirely — vestigial, nothing read it |
@@ -122,3 +124,27 @@ deployed package.
 - `docs/history.md` — chronological log of what's been built/removed and why
 - `docs/Konfirm_PRD.md` §4 (personas), §5 (FR-11/12/13), §6 (user flow)
 - `docs/Konfirm_TRD.md` §5 (API design), §11 (item #11, #14)
+
+---
+
+## Sponsorship evidence (2026-09-03)
+
+Read off testnet, not inferred. Three `Verdict` objects created through the
+real attest flow, and the transaction that created each:
+
+| Verdict | Sender (zkLogin user) | Sender SUI | Gas payer |
+|---|---|---|---|
+| `0xd2778e87…` | `0xedbdf75b…` | **0** | `0x0dec4c7d…` |
+| `0x526415ca…` | `0xe0b2050b…` | **0** | `0x0dec4c7d…` |
+| `0x00c40416…` | `0x33a9868f…` | **0** | `0x0dec4c7d…` |
+
+Three different users, every one holding zero SUI, every transaction paid by
+the same address that is not theirs — Enoki's sponsor pool. That is
+acceptance checks **3** (user at 0 SUI), **4** (real digest, object created)
+and **5** (gas payer is not the user) together, which `docs/plan.md` calls
+"the actual proof that sponsorship works."
+
+A fourth object, `0x2456e7f5…`, is a `sui client call` smoke test, not an
+attest: 41-byte ASCII claim hash, `trace_blob` set to the literal string
+`"trace"`, `confidence` 90 (outside the documented 0/1/2 range), no models.
+Harmless, but don't count it as flow evidence.
