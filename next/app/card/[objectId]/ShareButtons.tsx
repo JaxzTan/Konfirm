@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { btn } from "@/app/components/ui";
+
 export default function ShareButtons({
   shareUrl,
   shareText,
@@ -42,10 +44,11 @@ export default function ShareButtons({
   };
 
   return (
-    <div className="flex gap-3 mt-6">
+    <div className="grid">
       <button
+        type="button"
         onClick={handleShare}
-        className="flex-1 bg-[#1f4d3d] text-white rounded-xl py-3.5 font-bold text-sm"
+        className={btn.solid}
       >
         {canShare ? shareLabel : copied ? copiedLabel : copyLabel}
       </button>
