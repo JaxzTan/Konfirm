@@ -28,6 +28,12 @@ vi.mock('@/lib/sui/useSignAndExecuteTransaction', () => ({
   useSignAndExecuteTransaction: () => ({ mutateAsync: vi.fn() }),
 }));
 
+// GoogleLogin calls useRouter() (for the redirectTo prop) — needs an App
+// Router context that a plain render-only test doesn't provide.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 describe('Home', () => {
   it('renders the app name', () => {
     render(<Home />);
@@ -48,7 +54,7 @@ describe('GoogleLogin', () => {
     // for any provider — the real-world case is Enoki/Google not registered
     // yet (network hiccup, misconfigured Portal), covered directly here
     // rather than via Home's login-gate state.
-    render(<GoogleLogin label="Continue with Google" />);
+    render(<GoogleLogin labels={{ signIn: 'Continue with Google', unavailable: 'Sign-in is temporarily unavailable.' }} />);
     expect(screen.getByText('Sign-in is temporarily unavailable.')).toBeInTheDocument();
   });
 });

@@ -45,7 +45,10 @@ export default async function LoginPage({
           <h2 className="font-serif text-3xl font-bold mb-2 text-gray-900">{t("rightHeading")}</h2>
           <p className="text-gray-600 text-base mb-8">{t("rightSub")}</p>
 
-          <GoogleLogin label={t("continueGoogle")} redirectTo={`/home?lang=${locale}`} />
+          <GoogleLogin
+            labels={{ signIn: t("continueGoogle"), unavailable: t("signInUnavailable") }}
+            redirectTo={`/home?lang=${locale}`}
+          />
         </div>
       </div>
     </div>

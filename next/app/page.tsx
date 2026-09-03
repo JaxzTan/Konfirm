@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { NextIntlClientProvider, useTranslations } from "next-intl";
 import { Transaction } from "@mysten/sui/transactions";
@@ -122,40 +122,40 @@ function HomeContent({
     }
   };
 
-  // Signing in is not consent to publish. Enoki fires the transaction with
-  // no wallet confirmation popup (Enoki_setup.md gotcha #1), so logging in
-  // hands off to the confirm screen rather than straight to the write.
-  useEffect(() => {
-    if (needsLogin && isSignedIn) {
-      setNeedsLogin(false);
-      setNeedsConfirm(true);
-    }
-  }, [needsLogin, isSignedIn]);
-
-  const handleAttest = async () => {
+  // Real attest flow: /api/attest uploads the redacted trace to Walrus and
+  // normalizes the verdict into create_verdict's argument shape, then we
+  // build the Move call ourselves and sign+execute via the sponsor.
+  const handleConfirmAttest = async () => {
+    setNeedsLogin(false);
     setNeedsConfirm(false);
     setAttestError(null);
     setIsAttesting(true);
 
     try {
-      const claimHash = await computeClaimHash(text, lang);
-
       const attestResponse = await fetch("/api/attest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lang, result }),
       });
+      // Parse defensively: a 500 can come back as an HTML error page, and a
+      // raw SyntaxError here would bury the status code that explains it.
+      const args = await attestResponse.json().catch(() => ({}));
       if (!attestResponse.ok) {
-        const body = await attestResponse.json().catch(() => ({}));
-        throw new Error(body.error ?? `/api/attest returned ${attestResponse.status}`);
+        throw new Error(args.error ?? `/api/attest returned ${attestResponse.status}`);
       }
-      const args = await attestResponse.json();
+
+      const packageId = process.env.NEXT_PUBLIC_PACKAGE_ID;
+      if (!packageId || !/^0x[0-9a-fA-F]{64}$/.test(packageId)) {
+        throw new Error("NEXT_PUBLIC_PACKAGE_ID is missing or is not a 32-byte hex address.");
+      }
+
+      const claimHashBytes = await computeClaimHash(text, lang);
 
       const tx = new Transaction();
       tx.moveCall({
-        target: `${process.env.NEXT_PUBLIC_PACKAGE_ID}::registry::create_verdict`,
+        target: `${packageId}::registry::create_verdict`,
         arguments: [
-          tx.pure.vector("u8", claimHash),
+          tx.pure.vector("u8", claimHashBytes),
           tx.pure.u8(args.lang),
           tx.pure.u8(args.state),
           tx.pure.u8(args.score),
@@ -166,17 +166,17 @@ function HomeContent({
           tx.pure.vector("string", args.models),
           tx.pure.vector("string", args.requestIds),
           tx.pure.string(args.traceBlob),
-          tx.object("0x6"), // Clock
+          tx.object.clock(),
         ],
       });
 
       const { createdObjects } = await signAndExecute({ transaction: tx });
-      const verdict = createdObjects.find((o) => o.objectType.endsWith("::registry::Verdict"));
-      if (!verdict) {
-        throw new Error("Transaction succeeded but no Verdict object was created.");
+      const verdictObject = createdObjects.find((o) => o.objectType.includes("::registry::Verdict"));
+      if (!verdictObject) {
+        throw new Error("Transaction succeeded but no Verdict object was found.");
       }
 
-      setObjectId(verdict.objectId);
+      setObjectId(verdictObject.objectId);
       setShowResult(true);
     } catch (error) {
       console.error("Attest failed:", error);
@@ -190,39 +190,45 @@ function HomeContent({
 
   return (
     <div className="min-h-screen bg-[#f7f5ef]">
-      <div className="bg-[#0f2e23] px-4 sm:px-8 py-4 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-[#c98a3a] flex items-center justify-center font-bold text-[#0f2e23]">
-            K
-          </div>
-          <span className="text-white font-serif font-bold text-xl">Konfirm</span>
-        </Link>
-        <div className="flex items-center gap-4">
-          {/* Renders nothing while signed out, so the header is unchanged
-              for anyone who hasn't logged in. */}
-          <AccountBadge
-            labels={{ signedInAs: t("signedInAs"), signOut: t("signOut") }}
-            className="hidden sm:flex items-center gap-3 text-xs text-gray-200"
-          />
-          <select
-            value={lang}
-            onChange={(e) => setLang(e.target.value as Locale)}
-            className="text-xs text-gray-200 bg-white/10 px-3 py-1.5 rounded-full border-none outline-none cursor-pointer appearance-none pr-6"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23cfd8d2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "right 8px center",
-              backgroundSize: "12px",
-            }}
-          >
-            <option value="en" className="text-black bg-white">EN</option>
-            <option value="bm" className="text-black bg-white">BM</option>
-            <option value="zh" className="text-black bg-white">中文</option>
-          </select>
-          <Link href={`/login?lang=${lang}`} className="text-sm text-gray-300 hover:text-white cursor-pointer">
-          {t("signIn")}
+      <div className="bg-[#0f2e23] px-4 sm:px-8 py-4">
+        <div className="flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-[#c98a3a] flex items-center justify-center font-bold text-[#0f2e23]">
+              K
+            </div>
+            <span className="text-white font-serif font-bold text-xl">Konfirm</span>
           </Link>
-      </div>
+          <div className="flex items-center gap-4">
+            <select
+              value={lang}
+              onChange={(e) => setLang(e.target.value as Locale)}
+              className="text-xs text-gray-200 bg-white/10 px-3 py-1.5 rounded-full border-none outline-none cursor-pointer appearance-none pr-6"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23cfd8d2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 8px center",
+                backgroundSize: "12px",
+              }}
+            >
+              <option value="en" className="text-black bg-white">EN</option>
+              <option value="bm" className="text-black bg-white">BM</option>
+              <option value="zh" className="text-black bg-white">中文</option>
+            </select>
+            {!isSignedIn && (
+              <Link href={`/login?lang=${lang}`} className="text-sm text-gray-300 hover:text-white cursor-pointer">
+                {t("signIn")}
+              </Link>
+            )}
+          </div>
+        </div>
+        {/* Own row, right-aligned — renders nothing while signed out (AccountBadge
+            returns null), so this only ever takes up space once there's
+            something to show. Kept off the top row so the address text never
+            has to compete for width with the logo or language selector. */}
+        <AccountBadge
+          labels={{ signedInAs: t("signedInAs"), signOut: t("signOut") }}
+          className="flex items-center justify-end gap-3 text-xs text-gray-300 mt-2"
+        />
       </div>
 
       <div className="bg-gradient-to-b from-[#0f2e23] to-[#1f4d3d] px-4 sm:px-8 py-10 sm:py-16 text-center">
@@ -313,30 +319,36 @@ function HomeContent({
         </div>
       )}
 
-      {/* login is mandatory here — no result without it */}
+      {/* login only gates the Attest & Share action, not seeing the result */}
       {needsLogin && (
         <div className="max-w-md mx-auto px-4 sm:px-8 py-12 sm:py-16 text-center">
           <h2 className="font-serif text-2xl font-bold text-gray-900 mb-3">{t("loginGateTitle")}</h2>
           <p className="text-gray-600 text-sm leading-relaxed mb-8">{t("loginGateBody")}</p>
-          <GoogleLogin label={t("continueGoogle")} />
+          <GoogleLogin
+            labels={{ signIn: t("continueGoogle"), unavailable: t("signInUnavailable") }}
+            onConnected={() => {
+              setNeedsLogin(false);
+              setNeedsConfirm(true);
+            }}
+          />
         </div>
       )}
 
-      {/* Enoki fires the transaction with no wallet popup — this click is
-          the only place the user explicitly agrees before it's on-chain. */}
+      {/* Enoki signs with no wallet confirmation popup — this is the only
+          safety net before a real on-chain transaction fires */}
       {needsConfirm && (
         <div className="max-w-md mx-auto px-4 sm:px-8 py-12 sm:py-16 text-center">
           <h2 className="font-serif text-2xl font-bold text-gray-900 mb-3">{t("confirmTitle")}</h2>
           <p className="text-gray-600 text-sm leading-relaxed mb-8">{t("confirmBody")}</p>
           <button
-            onClick={handleAttest}
-            className="w-full bg-[#1f4d3d] text-white rounded-2xl py-4 font-bold text-base mb-3"
+            onClick={handleConfirmAttest}
+            className="w-full bg-[#1f4d3d] text-white rounded-2xl px-6 py-4 font-bold text-base mb-3"
           >
             {t("confirmButton")}
           </button>
           <button
-            onClick={resetResult}
-            className="w-full border border-gray-300 rounded-2xl py-4 font-bold text-base text-gray-900"
+            onClick={() => setNeedsConfirm(false)}
+            className="w-full border border-gray-300 rounded-2xl px-6 py-4 font-bold text-base text-gray-900"
           >
             {t("cancelButton")}
           </button>
@@ -356,7 +368,7 @@ function HomeContent({
           <h2 className="font-serif text-2xl font-bold text-gray-900 mb-3">{t("attestErrorTitle")}</h2>
           <p className="text-gray-600 text-sm leading-relaxed mb-8">{attestError}</p>
           <button
-            onClick={handleAttest}
+            onClick={handleConfirmAttest}
             className="w-full bg-[#1f4d3d] text-white rounded-2xl py-4 font-bold text-base mb-3"
           >
             {t("retry")}
