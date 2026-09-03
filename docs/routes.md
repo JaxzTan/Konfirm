@@ -11,7 +11,7 @@ the default and carries no param).
 | 04 | `/checking` | Checking with AI models |
 | 05 | `/signin` | Gate — the result is never shown before this |
 | 06 | `/confirm` | Confirm on-chain — the only explicit consent moment |
-| 07 | `/attesting` | Saving on-chain |
+| 07 | `/loading` | Saving on-chain (the write, not the AI check) |
 | 08 | `/failed` | Attest error (replaces the raw `alert()`) |
 | 09 | `/result/false` | Likely false · 25% |
 | 10 | `/result/true` | Likely true · 88% |
@@ -54,7 +54,7 @@ in `Shell.tsx` (a client component) rather than in `layout.tsx`.
 Landing on a mid-flow route cold (a shared link, a refresh) leaves the flow
 state empty and the screen falls back to the fixture set in `lib/fixtures.ts`.
 That is what makes every designed screen reviewable without walking the flow —
-and it means `/attesting` opened directly is a spinner with nothing behind it,
+and it means `/loading` opened directly is a spinner with nothing behind it,
 which is the accepted cost of giving transient states their own URLs.
 
 ## Outside the group

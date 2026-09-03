@@ -16,7 +16,7 @@ export type Mode = "text" | "link" | "photo";
 /**
  * Flow state for the whole check, held in the (check) route group's layout.
  *
- * Every screen is its own route — /checking, /confirm, /attesting, /result/…
+ * Every screen is its own route — /checking, /confirm, /loading, /result/…
  * — so the claim, the verdict and the pending transaction cannot live in a
  * page. They live here instead: a layout is not remounted when you navigate
  * between its own children, so this survives every step of the flow and is
@@ -162,7 +162,7 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
 
   const attest = async () => {
     setError(null);
-    go("/attesting");
+    go("/loading");
 
     try {
       const claimHash = await computeClaimHash(text, locale);
