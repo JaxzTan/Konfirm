@@ -14,7 +14,7 @@ CERT_KEY := $(CERT_DIR)/localhost-key.pem
 
 all: certs ## Build the images and start the stack in the background
 	$(COMPOSE) up -d --build
-	@echo "\n  https://localhost  (http://localhost redirects here)\n"
+	@ echo "https://localhost:8443/"
 
 certs: $(CERT) ## Generate the local TLS cert nginx serves (idempotent)
 
