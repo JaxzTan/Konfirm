@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import {CLAIM_SYSTEM_PROMPT, AI_MODELS} from "@/lib/global_variables";
+import {claimSystemPrompt, AI_MODELS} from "@/lib/global_variables";
 import { aggregate } from "@/lib/aggregate";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -11,15 +11,18 @@ export const maxDuration = 120;
  * each fulfilled model's real completion ID (aggregate() itself only keeps
  * `.model`, not `.id` — captured here instead of touching aggregate.ts).
  * Exported so /api/verdict can call this directly without an HTTP round trip.
+ *
+ * `language` ("en" | "bm" | "zh") controls what language the models answer
+ * in — it does not change what claim is being checked.
  */
-export async function getClaimVerdict(claim: string)
+export async function getClaimVerdict(claim: string, language: string = "en")
 {
 	const responses = [
-		sendPrompt(AI_MODELS[0], claim),
-		sendPrompt(AI_MODELS[1], claim),
-		sendPrompt(AI_MODELS[2], claim),
-		sendPrompt(AI_MODELS[3], claim),
-		sendPrompt(AI_MODELS[4], claim),
+		sendPrompt(AI_MODELS[0], claim, language),
+		sendPrompt(AI_MODELS[1], claim, language),
+		sendPrompt(AI_MODELS[2], claim, language),
+		sendPrompt(AI_MODELS[3], claim, language),
+		sendPrompt(AI_MODELS[4], claim, language),
 	];
 
 	// results will contain an array of promise responses
@@ -58,6 +61,7 @@ export async function POST(request: NextRequest)
 {
 	const body = await request.json();
 	const claim = body.claim;
+	const language = body.language ?? "en";
 
 	// Verify incoming request is in the correct format
 	if (!claim)
@@ -73,7 +77,7 @@ export async function POST(request: NextRequest)
 
 	try
 	{
-		const { finalVerdict } = await getClaimVerdict(claim);
+		const { finalVerdict } = await getClaimVerdict(claim, language);
 
 		return NextResponse.json(
 			{
@@ -99,7 +103,7 @@ export async function POST(request: NextRequest)
 
 /*------[Send User Prompt to a Model for processing]------*/
 
-async function sendPrompt(chosenModel: string, userInput: string)
+async function sendPrompt(chosenModel: string, userInput: string, language: string)
 {
 	const abortController = new AbortController();
 
@@ -169,7 +173,7 @@ async function sendPrompt(chosenModel: string, userInput: string)
 			model: chosenModel,
 			max_tokens: maxTokens,
 			messages: [
-				{ role: 'system', content: CLAIM_SYSTEM_PROMPT },
+				{ role: 'system', content: claimSystemPrompt(language) },
 				{ role: 'user', content: incomingPrompt }
 			],
 		},

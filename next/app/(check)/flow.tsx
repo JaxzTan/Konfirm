@@ -9,7 +9,7 @@ import { useKonfirmIdentity } from "@/lib/signer";
 import { useSignAndExecuteTransaction } from "@/lib/sui/useSignAndExecuteTransaction";
 import { computeClaimHash } from "@/lib/attest/claimHash";
 import { messagesByLocale, TIME_ZONE, type Locale } from "@/lib/locale";
-import { demoVerdict, verdictFromApi, type Verdict, type VerdictState } from "@/lib/fixtures";
+import { verdictFromApi, type Verdict } from "@/lib/fixtures";
 
 export type Mode = "text" | "link" | "photo";
 
@@ -58,8 +58,6 @@ type Flow = {
   setPhoto: (file: File | undefined) => void;
 
   verdict: Verdict | null;
-  /** The live verdict if there is one, else the fixture for `fallback`. */
-  verdictOr: (fallback: VerdictState) => Verdict;
   /** VirusTotal result for link mode — shown alongside, never blended into, the text verdict. */
   linkCheck: LinkCheck | null;
   /** Gemini image-authenticity result for photo mode — shown alongside, never blended into, the text verdict. */
@@ -203,7 +201,7 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
           ? fetch("/api/verify-image", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ imageBase64: photoDataUrl }),
+              body: JSON.stringify({ imageBase64: photoDataUrl, language: locale }),
             })
               .then((r) => r.json())
               .then((r) => (r.success ? setImageCheck(r.data) : null))
@@ -300,7 +298,6 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
     photoPreview,
     setPhoto,
     verdict,
-    verdictOr: (fallback) => verdict ?? demoVerdict(fallback, t),
     linkCheck,
     imageCheck,
     objectId,

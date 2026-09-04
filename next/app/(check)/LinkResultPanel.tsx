@@ -1,8 +1,10 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useTranslations } from "next-intl";
 
-import { Chip, Panel, Serif, btn } from "@/app/components/ui";
+import { Chip, Panel, Serif, Spinner, btn } from "@/app/components/ui";
 import { headingFont } from "@/lib/locale";
 import { useFlow, type LinkCheck } from "./flow";
 
@@ -36,21 +38,18 @@ const RATING_ICON: Record<LinkCheck["rating"], string> = {
   INSUFFICIENT_DATA: "?",
 };
 
-/** Fallback shown when a `/result/link` URL is opened cold, with no scan behind it. */
-const FIXTURE: LinkCheck = {
-  rating: "SAFE",
-  score: 92,
-  significantTriggered: false,
-  triggeredBy: null,
-  maliciousDetections: 0,
-  suspiciousDetections: 0,
-  totalActiveVendors: 68,
-};
-
 export function LinkResultPanel() {
   const t = useTranslations("App");
-  const { locale, linkCheck, reset } = useFlow();
-  const result = linkCheck ?? FIXTURE;
+  const { locale, linkCheck, reset, href } = useFlow();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!linkCheck) router.replace(href("/"));
+  }, [linkCheck, href, router]);
+
+  if (!linkCheck) return <Spinner locale={locale} title={t("loadingLink")} sub="" />;
+
+  const result = linkCheck;
   const tone = RATING_TONE[result.rating];
 
   const head = (

@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import {IMAGE_SYSTEM_PROMPT, AI_MODELS} from "@/lib/global_variables";
+import {imageSystemPrompt, AI_MODELS} from "@/lib/global_variables";
 import { aggregate } from "@/lib/aggregate";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -11,12 +11,15 @@ export const maxDuration = 120;
  * accept image input) and returns Gilbert's aggregate() shape plus each
  * fulfilled model's real completion ID. Exported so /api/verdict can call
  * this directly without an HTTP round trip.
+ *
+ * `language` ("en" | "bm" | "zh") controls what language the models answer
+ * in.
  */
-export async function getImageVerdict(base64URL: string)
+export async function getImageVerdict(base64URL: string, language: string = "en")
 {
 	const responses = [
-		sendPrompt(AI_MODELS[3], base64URL),
-		sendPrompt(AI_MODELS[4], base64URL),
+		sendPrompt(AI_MODELS[3], base64URL, language),
+		sendPrompt(AI_MODELS[4], base64URL, language),
 	];
 
 	// results will contain an array of promise responses
@@ -46,6 +49,7 @@ export async function POST(request: NextRequest)
 {
     const body = await request.json();
     const imageBase64 = body.imageBase64;
+    const language = body.language ?? "en";
 
     // Verify incoming request is in the correct format
     if (!imageBase64 || typeof imageBase64 !== "string") {
@@ -60,7 +64,7 @@ export async function POST(request: NextRequest)
 
 	try
 	{
-		const { finalVerdict } = await getImageVerdict(imageBase64);
+		const { finalVerdict } = await getImageVerdict(imageBase64, language);
 
 		return NextResponse.json(
 			{
@@ -85,7 +89,7 @@ export async function POST(request: NextRequest)
 }
 
 /*------[Send User Prompt to a Model for processing]------*/
-async function sendPrompt(chosenModel: string, userInput: string)
+async function sendPrompt(chosenModel: string, userInput: string, language: string)
 {
 	const abortController = new AbortController();
 
@@ -128,7 +132,7 @@ async function sendPrompt(chosenModel: string, userInput: string)
 				model: chosenModel,
 				max_tokens: 550,
 				messages: [
-					{ role: 'system', content: IMAGE_SYSTEM_PROMPT },
+					{ role: 'system', content: imageSystemPrompt(language) },
 					{
 						role: 'user',
 						content: [

@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getClaimVerdict } from "@/app/api/verify-claim/route";
+import { messagesByLocale, resolveLocale } from "@/lib/locale";
+
+// Short, purely mechanical fallback strings the backend itself generates
+// (not model output) — kept here rather than in messages/*.json since
+// they're a technical placeholder, not user-facing product copy.
+const NO_SIGNALS: Record<string, string> = {
+  en: "No specific signals returned.",
+  bm: "Tiada isyarat khusus dikembalikan.",
+  zh: "未返回具体信号。",
+};
 
 // Human-readable names for the UI — Gilbert's AI_MODELS entries are raw
 // provider/model IDs (e.g. "moonshotai/Kimi-K2.6"), not display names.
@@ -30,9 +40,9 @@ function stateFromVerdict(claimVerdict: string | null): "true" | "false" | "unve
   return score >= 50 ? "true" : "false";
 }
 
-function describe(state: string, greenFlags: string[], redFlags: string[]): string {
+function describe(state: string, greenFlags: string[], redFlags: string[], language: ReturnType<typeof resolveLocale>): string {
   if (state === "unverifiable") {
-    return "Models could not find enough information to verify this claim.";
+    return messagesByLocale[language].App.descUnverifiable;
   }
   const flags = state === "true" ? greenFlags : redFlags;
   return flags.slice(0, 2).join(". ") || "";
@@ -41,13 +51,14 @@ function describe(state: string, greenFlags: string[], redFlags: string[]): stri
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const claim = body?.text;
+  const language = resolveLocale(body?.language);
 
   if (!claim || typeof claim !== "string") {
     return NextResponse.json({ error: "Missing 'text' in request body." }, { status: 400 });
   }
 
   try {
-    const { finalVerdict, requestIds } = await getClaimVerdict(claim);
+    const { finalVerdict, requestIds } = await getClaimVerdict(claim, language);
     const state = stateFromVerdict(finalVerdict.claim_verdict);
 
     // Dedupe flags across models for the top-level "Key Signals" block.
@@ -59,14 +70,14 @@ export async function POST(request: NextRequest) {
       score: VERDICT_SCORES[r.verdict] ?? 0,
       reasoning:
         (r.verdict === "TRUE" || r.verdict === "LIKELY_TRUE" ? r.green_flags : r.red_flags).join(". ") ||
-        "No specific signals returned.",
+        NO_SIGNALS[language],
       requestId: requestIds[r.model] || "unavailable",
     }));
 
     return NextResponse.json({
       state,
       score: finalVerdict.trust_score,
-      description: describe(state, allGreen, allRed),
+      description: describe(state, allGreen, allRed, language),
       flags: state === "true" ? allGreen : state === "false" ? allRed : [],
       models,
       modelCount: models.length,
