@@ -1,35 +1,56 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useTranslations } from "next-intl";
 
 import {
+  Chip,
   Donut,
   Micro,
   ModelCard,
   Panel,
   Serif,
   SignalsAndModels,
+  Spinner,
   Warn,
   btn,
 } from "@/app/components/ui";
 import { headingFont } from "@/lib/locale";
-import type { VerdictState } from "@/lib/fixtures";
 import { useFlow } from "./flow";
 
 /**
  * Screens 09–13, the body of `/result/[state]`.
  *
- * The verdict comes from the flow when there is a real check behind it, and
- * from the fixture set for `state` otherwise, so each variant has a URL that
- * can be opened cold.
+ * The verdict comes from the flow's own state — there is no fixture
+ * fallback. Landing here cold (a refresh, a bookmarked URL, no check ever
+ * run) sends the user back to `/` instead of showing a canned result, since
+ * a result screen that can display fake data as if real is not something a
+ * public misinformation checker can afford.
  */
-export function ResultPanel({ state }: { state: VerdictState }) {
+const IMAGE_VERDICT_TONE: Record<string, "t" | "f"> = {
+  TRUE: "t",
+  LIKELY_TRUE: "t",
+  PARTIALLY_TRUE: "f",
+  LIKELY_FALSE: "f",
+  FALSE: "f",
+  CANNOT_BE_VERIFIED: "f",
+};
+
+export function ResultPanel() {
   const t = useTranslations("App");
-  const { locale, verdictOr, objectId, reset, check, href } = useFlow();
-  const verdict = verdictOr(state);
+  const { locale, verdict, imageCheck, objectId, reset, check, href } = useFlow();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!verdict) router.replace(href("/"));
+  }, [verdict, href, router]);
+
+  if (!verdict) return <Spinner locale={locale} title={t("loading")} sub="" />;
+
   const scored = verdict.score !== null;
-  const shareHref = href(`/card/${objectId ?? "0x7a3e4f19b8c2d05e"}`);
+  const shareHref = href(`/card/${objectId}`);
 
   const footer = (primaryLabel: string, primaryAction?: () => void) => (
     <div className="grid gap-[9px] pt-1">
@@ -99,6 +120,19 @@ export function ResultPanel({ state }: { state: VerdictState }) {
           tone={verdict.tone}
           models={verdict.models}
         />
+      )}
+
+      {imageCheck && imageCheck.claim_verdict && (
+        <div className="grid gap-[10px]">
+          <Micro>{t("mImageCheck")}</Micro>
+          <div className="grid gap-[6px]">
+            <Chip tone={IMAGE_VERDICT_TONE[imageCheck.claim_verdict] ?? "f"}>
+              {imageCheck.claim_verdict.replaceAll("_", " ")}
+              {imageCheck.trust_score !== null ? ` · ${imageCheck.trust_score}%` : ""}
+            </Chip>
+            <p className="text-[12px] leading-[1.5] text-[#6b7280]">{t("mImageCheckNote")}</p>
+          </div>
+        </div>
       )}
 
       {verdict.state === "disputed" && verdict.positions && (

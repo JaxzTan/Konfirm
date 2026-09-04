@@ -1,7 +1,6 @@
-import * as tests from "./test-links.ts";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(request)
+export async function POST(request: NextRequest)
 {
     const body = await request.json();
     const link = body.link;
@@ -40,22 +39,25 @@ export async function POST(request)
 		return NextResponse.json(
 			{
 				success: false,
-				error: error.message
+				error: error instanceof Error ? error.message : "Unknown error."
 			},
 			{ status: 500 }
 		);
 	}
 }
 
-async function submitRequest(URLToScan)
+async function submitRequest(URLToScan: string)
 {
+	const apiKey = process.env.VIRUSTOTAL_API_KEY;
+	if (!apiKey) throw new Error("VIRUSTOTAL_API_KEY is not configured.");
+
 	// Initialize POST request
 	const options = {
 		method: "POST",
 		headers: {
 			accept: "application/json",
 			"content-type": "application/x-www-form-urlencoded",
-			"x-apikey": process.env.VIRUSTOTAL_API_KEY
+			"x-apikey": apiKey
 		},
 		body: new URLSearchParams({url: URLToScan})
 	};
@@ -74,18 +76,21 @@ async function submitRequest(URLToScan)
 	}
 	catch (error)
 	{
-		throw new Error(error.message);
+		throw new Error(error instanceof Error ? error.message : "Unknown error.");
 	}
 }
 
-async function obtainResult(analysisID)
+async function obtainResult(analysisID: string)
 {
+	const apiKey = process.env.VIRUSTOTAL_API_KEY;
+	if (!apiKey) throw new Error("VIRUSTOTAL_API_KEY is not configured.");
+
 	// Initialize GET request
 	const options = {
-		method: "GET", 
+		method: "GET",
 		headers: {
 			accept: "application/json",
-			"x-apikey": process.env.VIRUSTOTAL_API_KEY
+			"x-apikey": apiKey
 		}
 	};
 
@@ -115,11 +120,12 @@ async function obtainResult(analysisID)
 	}
 	catch (error)
 	{
-		throw new Error(error.message);
+		throw new Error(error instanceof Error ? error.message : "Unknown error.");
 	}
 }
 
-function calculateSafetyScore(linkAttributes) 
+// VirusTotal's attribute payload is large and not worth fully typing here.
+function calculateSafetyScore(linkAttributes: any)
 {
 	// If any one of these Vendors flag a link as "malicious", return "DANGEROUS" immediately
 	const SIGNIFICANT_VENDORS = [

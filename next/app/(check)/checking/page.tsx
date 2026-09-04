@@ -8,6 +8,10 @@ import { useFlow } from "../flow";
 /** Screen 04 — `/checking` */
 export default function CheckingPage() {
   const t = useTranslations("App");
-  const { locale } = useFlow();
-  return <Spinner locale={locale} title={t("loading")} sub={t("loadingSub")} />;
+  const { locale, mode } = useFlow();
+  return mode === "link" ? (
+    <Spinner locale={locale} title={t("loadingLink")} sub={t("loadingLinkSub")} />
+  ) : (
+    <Spinner locale={locale} title={t("loading")} sub={t("loadingSub")} />
+  );
 }

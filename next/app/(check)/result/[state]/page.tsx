@@ -22,6 +22,6 @@ export default async function ResultRoute({
 }: {
   params: Promise<{ state: VerdictState }>;
 }) {
-  const { state } = await params;
-  return <ResultPanel state={state} />;
+  await params;
+  return <ResultPanel />;
 }

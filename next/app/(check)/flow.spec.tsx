@@ -59,11 +59,11 @@ describe('check flow', () => {
     expect(screen.queryByText('Auto-detecting language')).not.toBeInTheDocument();
   });
 
-  it('renders the verdict named by the route segment', () => {
-    // /result/true — with no check behind it the fixture for that segment
-    // stands in, so the segment is the only thing selecting this screen.
-    inFlow(<ResultPanel state="true" />);
-    expect(screen.getByText('Likely True')).toBeInTheDocument();
+  it('redirects home instead of showing a result when there is no real verdict', () => {
+    // Landing on /result/[state] cold (no check behind it) must never show
+    // fixture content as if it were real — it bounces to / instead.
+    inFlow(<ResultPanel />);
+    expect(screen.queryByText('Likely True')).not.toBeInTheDocument();
     expect(screen.queryByText('Likely False')).not.toBeInTheDocument();
   });
 

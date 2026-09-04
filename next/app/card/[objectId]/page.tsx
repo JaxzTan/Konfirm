@@ -4,19 +4,43 @@ import { createTranslator } from "next-intl";
 import ShareButtons from "./ShareButtons";
 import { Warn } from "@/app/components/ui";
 import { headingFont, messagesByLocale, resolveLocale, TIME_ZONE } from "@/lib/locale";
+import { fetchOnChainVerdict, fetchTrace, STATE_VERDICT } from "@/lib/sui/verdict";
 
 type Card = {
   objectId: string;
-  state: "true" | "false";
+  /** "unclear" covers disputed/unverifiable/insufficient alike — this card
+   *  has no room for that nuance, but it must not claim "false" when the
+   *  models never actually reached a verdict. "view full result" is what
+   *  /v/[objectId]'s real state breakdown is for. */
+  state: "true" | "false" | "unclear";
   modelCount: number;
+  /** Real per-verdict description from the Walrus trace, or null when the
+   *  trace is unreadable — falls back to the generic string-table copy. */
+  description: string | null;
 };
 
-// TODO: replace with a real Sui fullnode read (handoff gap #4). Headline and
-// body come from the string table because real content arrives pre-localized
-// from chain, so there is nothing to translate at render time.
+/** Reads the real on-chain Verdict — same source /v/[objectId] uses. */
 async function getCard(objectId: string): Promise<Card | null> {
-  if (!objectId) return null;
-  return { objectId, state: "false", modelCount: 2 };
+  const onChain = await fetchOnChainVerdict(objectId);
+  if (!onChain) return null;
+
+  const trace = await fetchTrace(onChain.traceBlob);
+  const traceState = trace?.state;
+  const state: Card["state"] =
+    traceState === "true" || traceState === "false"
+      ? traceState
+      : onChain.state === STATE_VERDICT && onChain.score !== null
+        ? onChain.score >= 50
+          ? "true"
+          : "false"
+        : "unclear";
+
+  return {
+    objectId: onChain.objectId,
+    state,
+    modelCount: onChain.modelCount,
+    description: typeof trace?.description === "string" ? trace.description : null,
+  };
 }
 
 /** Screen 15 — the screenshot-bait share card. */
@@ -42,7 +66,12 @@ export default async function CardPage({
   if (!card) notFound();
 
   const isTrue = card.state === "true";
-  const headline = isTrue ? t("verdictTrue") : t("verdictFalse");
+  const headline =
+    card.state === "true"
+      ? t("verdictTrue")
+      : card.state === "false"
+        ? t("verdictFalse")
+        : t("verdictUnverifiable");
   const verifyPath = `/v/${card.objectId}?lang=${locale}`;
   const origin = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://konfirm.my").replace(
     /^https?:\/\//,
@@ -63,7 +92,9 @@ export default async function CardPage({
           {headline}
         </h1>
 
-        <p className="text-[14.5px] leading-[1.65] text-white">{t("cardBody")}</p>
+        <p className="text-[14.5px] leading-[1.65] text-white">
+          {card.description ?? t("cardBody")}
+        </p>
 
         {card.modelCount < 3 && (
           <Warn>{card.modelCount === 1 ? t("oneModel") : t("lowModels")}</Warn>

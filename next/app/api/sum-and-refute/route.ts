@@ -1,11 +1,11 @@
 import OpenAI from "openai";
 import { SUMMARY_AND_REFUTATION_SYSTEM_PROMPT, AI_MODELS } from "@/lib/global_variables";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 // Response time limit before timeout
 export const maxDuration = 120;
 
-export async function POST(request)
+export async function POST(request: NextRequest)
 {
 	const body = await request.json();
 	const originalMessage = body["original_message"];
@@ -92,10 +92,10 @@ export async function POST(request)
 	catch (error)
 	{
 		return NextResponse.json(
-			{ 
-				success: false, 
-				error: error.message
-			}, 
+			{
+				success: false,
+				error: error instanceof Error ? error.message : "Unknown error."
+			},
 			{ status: 500 }
 		);
 	}
@@ -104,7 +104,7 @@ export async function POST(request)
 
 /*------[Send User Prompt to a Model for processing]------*/
 
-async function sendPrompt(chosenModel, userInput)
+async function sendPrompt(chosenModel: string, userInput: string)
 {
 	const abortController = new AbortController();
 
@@ -115,7 +115,7 @@ async function sendPrompt(chosenModel, userInput)
 
 	const incomingPrompt = userInput;
 
-	let client = null;
+	let client: OpenAI | null = null;
 
 	// Initialize OpenAI Client
 	try
@@ -127,7 +127,7 @@ async function sendPrompt(chosenModel, userInput)
 				apiKey: process.env.GONKA_ROUTER_API_KEY,
 				baseURL: 'https://api.gonkarouter.io/v1',
 				defaultHeaders: {
-					"X-Gonka-No-Fallback": true
+					"X-Gonka-No-Fallback": "true"
 				}
 			});
 		}
@@ -146,7 +146,7 @@ async function sendPrompt(chosenModel, userInput)
 	}
 	catch (error)
 	{
-		throw new Error("Client ERROR: " + error.message);
+		throw new Error("Client ERROR: " + (error instanceof Error ? error.message : "Unknown error."));
 	}
 
 	// Submit request to Gonka Router
@@ -177,7 +177,7 @@ async function sendPrompt(chosenModel, userInput)
         clearTimeout(timeoutID);
 
 
-        let responseData = response.data;
+        const responseData: OpenAI.Chat.Completions.ChatCompletion & { gonka_request_id?: string | null } = response.data;
         const rawResponse = response.response;
 
         if ([AI_MODELS[0], AI_MODELS[1], AI_MODELS[2]].includes(chosenModel))
@@ -190,11 +190,11 @@ async function sendPrompt(chosenModel, userInput)
 	catch (error)
 	{
 		clearTimeout(timeoutID);
-		throw new Error(`ERROR: Request to ${chosenModel} was aborted due to: ` + error.message);
+		throw new Error(`ERROR: Request to ${chosenModel} was aborted due to: ` + (error instanceof Error ? error.message : "Unknown error."));
 	}
 }
 
-function cleanAndReturn(results)
+function cleanAndReturn(results: PromiseSettledResult<any>[])
 {
 	for (const each of results)
 	{

@@ -1,13 +1,5 @@
 import type { ModelResult, Tone } from "@/app/components/ui";
 
-export const MODEL_NAMES = ["DeepSeek", "Kimi", "MiniMax"] as const;
-
-const REQ_FALSE = ["gnk_01HQ7F4M2X9B", "gnk_01HQ7F4M31KD", "gnk_01HQ7F4M3B7A"];
-const REQ_TRUE = ["gnk_01HQ8B2N4K7P", "gnk_01HQ8B2N4R2V", "gnk_01HQ8B2N51DC"];
-
-const SCORES_FALSE = ["18%", "25%", "10%"];
-const SCORES_TRUE = ["88%", "84%", "91%"];
-
 export const VERDICT_STATES = [
   "false",
   "true",
@@ -46,104 +38,7 @@ export function resolveVerdictState(value: string | undefined): VerdictState {
 
 type T = { (key: string): string; raw(key: string): unknown };
 
-function models(reasons: string[], scores: string[], ids: string[]): ModelResult[] {
-  return reasons.map((reasoning, i) => ({
-    name: MODEL_NAMES[i],
-    score: scores[i],
-    reasoning,
-    requestId: ids[i],
-  }));
-}
-
-/**
- * The fixture set from the design handoff, rendered in the active locale.
- *
- * This backs the `?s=result&v=…` deep links so every designed screen has a
- * URL, and it is the only content `/card` and `/v` have until the Sui
- * fullnode read lands. A real check never goes through here — `/api/verdict`
- * returns the same shape and is used verbatim.
- */
-export function demoVerdict(state: VerdictState, t: T): Verdict {
-  const signalsFalse = t.raw("signalsFalse") as string[];
-  const signalsTrue = t.raw("signalsTrue") as string[];
-  const reasonFalse = t.raw("reasonFalse") as string[];
-  const reasonTrue = t.raw("reasonTrue") as string[];
-
-  switch (state) {
-    case "true":
-      return {
-        state,
-        score: 88,
-        tone: "t",
-        title: t("verdictTrue"),
-        description: t("descTrue"),
-        signals: signalsTrue,
-        models: models(reasonTrue, SCORES_TRUE, REQ_TRUE),
-        modelCount: 3,
-      };
-    case "disputed":
-      return {
-        state,
-        score: null,
-        tone: "f",
-        title: t("verdictDisputed"),
-        description: t("descDisputed"),
-        signals: [],
-        models: [],
-        modelCount: 3,
-        positions: [
-          {
-            stance: "f",
-            label: t("sideFalse"),
-            models: "DeepSeek 32% · MiniMax 44%",
-            reasoning: t("posFalse"),
-          },
-          {
-            stance: "t",
-            label: t("sideTrue"),
-            models: "Kimi 71%",
-            reasoning: t("posTrue"),
-          },
-        ],
-      };
-    case "unverifiable":
-      return {
-        state,
-        score: null,
-        tone: "f",
-        title: t("verdictUnverifiable"),
-        description: t("descUnverifiable"),
-        signals: [],
-        models: [],
-        modelCount: 3,
-      };
-    case "insufficient":
-      return {
-        state,
-        score: null,
-        tone: "f",
-        title: t("verdictInsufficient"),
-        description: t("descInsufficient"),
-        signals: [],
-        models: models(reasonFalse.slice(0, 1), SCORES_FALSE, REQ_FALSE),
-        modelCount: 1,
-      };
-    default:
-      return {
-        state: "false",
-        score: 25,
-        tone: "f",
-        title: t("verdictFalse"),
-        description: t("descFalse"),
-        signals: signalsFalse,
-        models: models(reasonFalse, SCORES_FALSE, REQ_FALSE),
-        modelCount: 3,
-      };
-  }
-}
-
-
-/** Shape returned by `/api/verdict`. Kept loose — it is a fixture route today. */
+/** Shape returned by `/api/verdict`. Kept loose since it is translated field-by-field below. */
 type ApiVerdict = {
   state: string;
   score?: number;
