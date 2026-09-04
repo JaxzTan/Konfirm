@@ -98,6 +98,8 @@
     "copied": "Disalin!",
     "signIn": "Log masuk",
     "signOut": "Log keluar",
-    "signedInAs": "Log masuk sebagai"
+    "signedInAs": "Log masuk sebagai",
+    "claimFingerprint": "Cap jari dakwaan",
+    "traceUnavailable": "Jejak penaakulan penuh tidak dapat dimuatkan buat masa ini. Rekod atas rantaian di bawah tidak terjejas."
   }
 }

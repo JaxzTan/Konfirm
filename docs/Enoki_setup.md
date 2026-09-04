@@ -349,7 +349,7 @@ NEXT_PUBLIC_SUI_NETWORK=testnet
 1. `<GoogleLogin />` 能弹出 Google 弹窗
 2. 登录后 `useCurrentAccount()` 返回一个 `0x...` 地址
 3. 该地址在 Sui testnet 浏览器上余额为 **0 SUI**
-4. 调用 `submit_verdict` 成功返回 digest
+4. 调用 `registry::create_verdict` 成功返回 digest
 5. 交易详情里 gas payer **不是**用户地址
 6. 同一个 Google 账号重新登录，得到**同一个**地址
 
