@@ -1,33 +1,25 @@
 import { notFound } from "next/navigation";
 import { createTranslator } from "next-intl";
+
 import ShareButtons from "./ShareButtons";
+import { Warn } from "@/app/components/ui";
+import { headingFont, messagesByLocale, resolveLocale, TIME_ZONE } from "@/lib/locale";
 
-import enMessages from "@/messages/en.json";
-import bmMessages from "@/messages/bm.json";
-import zhMessages from "@/messages/zh.json";
-
-const messagesByLocale = { en: enMessages, bm: bmMessages, zh: zhMessages };
-
-type Locale = "en" | "bm" | "zh";
-
-type Verdict = {
+type Card = {
   objectId: string;
-  state: "true" | "false" | "unavailable" | "insufficient";
+  state: "true" | "false";
   modelCount: number;
 };
 
-// TODO: replace with a real Sui fullnode read; headline/description come from
-// Card.mockHeadline/mockDescription below since real content arrives pre-localized
-async function getVerdict(objectId: string): Promise<Verdict | null> {
+// TODO: replace with a real Sui fullnode read (handoff gap #4). Headline and
+// body come from the string table because real content arrives pre-localized
+// from chain, so there is nothing to translate at render time.
+async function getCard(objectId: string): Promise<Card | null> {
   if (!objectId) return null;
-
-  return {
-    objectId,
-    state: "false",
-    modelCount: 3,
-  };
+  return { objectId, state: "false", modelCount: 2 };
 }
 
+/** Screen 15 — the screenshot-bait share card. */
 export default async function CardPage({
   params,
   searchParams,
@@ -36,75 +28,69 @@ export default async function CardPage({
   searchParams: Promise<{ lang?: string }>;
 }) {
   const { objectId } = await params;
-  const searchParamsResolved = await searchParams;
-  const locale = (["en", "bm", "zh"].includes(searchParamsResolved.lang ?? "")
-    ? searchParamsResolved.lang
-    : "en") as Locale;
+  const locale = resolveLocale((await searchParams).lang);
+  const heading = headingFont(locale);
 
   const t = createTranslator({
     locale,
-    timeZone: "Asia/Kuala_Lumpur",
+    timeZone: TIME_ZONE,
     messages: messagesByLocale[locale],
-    namespace: "Card",
+    namespace: "App",
   });
 
-  const verdict = await getVerdict(objectId);
+  const card = await getCard(objectId);
+  if (!card) notFound();
 
-  if (!verdict) notFound();
-
-  const isTrue = verdict.state === "true";
-  const headline = t("mockHeadline");
-  const description = t("mockDescription");
-  const verifyPath = `/v/${verdict.objectId}?lang=${locale}`;
-  const verifyUrl =
-    (process.env.NEXT_PUBLIC_SITE_URL ?? "https://konfirm.my") + verifyPath;
+  const isTrue = card.state === "true";
+  const headline = isTrue ? t("verdictTrue") : t("verdictFalse");
+  const verifyPath = `/v/${card.objectId}?lang=${locale}`;
+  const origin = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://konfirm.my").replace(
+    /^https?:\/\//,
+    "",
+  );
+  const verifyUrl = `${origin}/v/${card.objectId}`;
 
   return (
-    <div className="min-h-screen bg-[#f7f5ef] flex flex-col items-center px-5 py-10">
-      <div className="w-full max-w-md rounded-3xl p-6 sm:p-8 flex flex-col bg-[#0f2e23]">
-        <span className="text-white font-serif font-bold text-2xl mb-6 sm:mb-8">Konfirm</span>
+    <div className="grid flex-1 content-center gap-[18px] bg-[#f7f5ef] px-5 py-[26px]">
+      <div className="grid gap-4 rounded-[26px] bg-gradient-to-b from-[#0f2e23] to-[#0b241b] px-6 py-[26px]">
+        <p className="font-serif text-[18px] text-[#f7f5ef]">Konfirm</p>
 
         <h1
-          className={`font-serif font-bold text-3xl sm:text-4xl mb-4 ${
+          className={`text-[34px] leading-[1.2] ${heading} ${
             isTrue ? "text-[#5fbf8f]" : "text-[#e08a6f]"
           }`}
         >
           {headline}
         </h1>
 
-        <p className="text-white text-base leading-relaxed mb-8 sm:mb-10">{description}</p>
+        <p className="text-[14.5px] leading-[1.65] text-white">{t("cardBody")}</p>
 
-        {verdict.modelCount < 3 && (
-          <div className="bg-[#c98a3a]/20 border border-[#c98a3a]/40 rounded-lg px-3 py-2 mb-6 self-start">
-            <span className="text-[#f0d9a8] text-xs font-semibold">
-              ⚠ {t("onlyModelsParticipated", { count: verdict.modelCount })}
-            </span>
-          </div>
+        {card.modelCount < 3 && (
+          <Warn>{card.modelCount === 1 ? t("oneModel") : t("lowModels")}</Warn>
         )}
 
-        <div className="border-t border-dashed border-white/20 pt-4 flex flex-col gap-2 mt-auto">
-          <span className="text-gray-400 text-[10px] uppercase tracking-wide leading-tight">
-            {t("verifiedOnChain")}
-          </span>
-          <span className="text-[#c98a3a] text-xs font-mono break-all">{verifyUrl}</span>
+        <div className="grid gap-[6px] border-t border-dashed border-[#f7f5ef]/30 pt-[14px]">
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#9ca3af]">
+            {t("cardWarn")}
+          </p>
+          <p className="break-all font-mono text-[12.5px] text-[#c98a3a]">{verifyUrl}</p>
         </div>
       </div>
 
-      <div className="w-full max-w-md">
-        <ShareButtons
-          shareUrl={verifyUrl}
-          shareText={`Konfirm checked this claim — ${headline}.`}
-          shareLabel={t("shareToWhatsapp")}
-          copyLabel={t("copyLink")}
-          copiedLabel={t("copied")}
-        />
-        <a
-          href={verifyPath}
-          className="block text-center text-sm text-gray-600 mt-4 underline"
-        >
-          {t("viewFullVerdict")}
-        </a>
-      </div>
+      <ShareButtons
+        shareUrl={`https://${verifyUrl}`}
+        shareText={`Konfirm — ${headline}.`}
+        shareLabel={t("shareWa")}
+        copyLabel={t("shareWa")}
+        copiedLabel={t("copied")}
+      />
+
+      <a
+        href={verifyPath}
+        className="text-center text-[13.5px] text-[#0f2e23] underline"
+      >
+        {t("viewFull")}
+      </a>
     </div>
   );
 }
