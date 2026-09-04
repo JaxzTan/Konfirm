@@ -41,16 +41,13 @@ export async function POST(request)
 		{
 			if (each.status === "fulfilled" && each.value.choices[0].message.content !== null && each.value.choices[0].message.content !== "")
 			{
-				//console.log(`\n${each.value.model} responded`);
 				fulfilledPromises.push(each);
 			}
 		}
 
 		if (fulfilledPromises.length > 0)
 		{
-			//console.log(`Gonna run aggregate`);
 			const finalVerdict = await aggregate(fulfilledPromises, "claim");
-			//console.log("\nFinal Verdict :\n" + `${JSON.stringify(finalVerdict, null, 2)}` + "\n");
 
 			return NextResponse.json(
 				{
@@ -136,43 +133,40 @@ async function sendPrompt(chosenModel, userInput)
 	// Submit request to Gonka Router
 	try
 	{
+		let maxTokens;
+
 		// For Kimi, Deepseek, and Gemini Models
 		if (!(chosenModel === AI_MODELS[2]))
-		{
-			const response = await client.chat.completions.create({
-				model: chosenModel,
-				max_tokens: 550,
-				messages: [
-					{ role: 'system', content: CLAIM_SYSTEM_PROMPT },
-					{ role: 'user', content: incomingPrompt }
-				],
-			},
-			{
-				signal: abortController.signal
-			});
-
-			clearTimeout(timeoutID);
-			return response;
-		}
+			maxTokens = 550;
 		// For MiniMax because requires extra max_tokens due to <think> block
 		else
-		{
-			const response = await client.chat.completions.create({
-				model: chosenModel,
-				max_tokens: 1024,
-				messages: [
-					{ role: 'system', content: CLAIM_SYSTEM_PROMPT },
-					{ role: 'user', content: incomingPrompt }
-				],
-			},
-			{
-				signal: abortController.signal
-			});
+			maxTokens = 1024;
 
-			clearTimeout(timeoutID);
-			return response;
+
+		const response = await client.chat.completions.create({
+			model: chosenModel,
+			max_tokens: maxTokens,
+			messages: [
+				{ role: 'system', content: CLAIM_SYSTEM_PROMPT },
+				{ role: 'user', content: incomingPrompt }
+			],
+		},
+		{
+			signal: abortController.signal
+		}).withResponse();
+
+		clearTimeout(timeoutID);
+
+
+		let responseData = response.data;
+		const rawResponse = response.response;
+
+		if ([AI_MODELS[0], AI_MODELS[1], AI_MODELS[2]].includes(chosenModel))
+		{
+			responseData.gonka_request_id = rawResponse.headers.get("X-Request-Id");
 		}
 
+		return responseData;
 	}
 	catch (error)
 	{
@@ -182,12 +176,3 @@ async function sendPrompt(chosenModel, userInput)
 }
 
 
-/*
-
-				console.log(`${JSON.stringify(each.value)}`);
-				console.log(`${JSON.stringify(each.value.choices[0].message.content)}`);
-				console.log(`${JSON.stringify(each.value.choices[0].reasoning)}`);
-				console.log(`${JSON.stringify(each.value.usage)}`);
-
-
-*/

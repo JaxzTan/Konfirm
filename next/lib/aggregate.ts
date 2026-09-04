@@ -1,17 +1,6 @@
 import { NextResponse } from "next/server";
+import { CLAIM_MODEL_WEIGHTS, IMAGE_MODEL_WEIGHTS, verdictTrustScores } from "./global_variables.ts";
 
-const CLAIM_MODEL_WEIGHTS = {
-	"moonshotai/Kimi-K2.6": 1.0,
-	"gemini-3.5-flash-lite": 0.95,
-	"deepseek-ai/DeepSeek-V4-Flash-0731": 0.92,
-	"MiniMaxAI/MiniMax-M2.7": 0.88,
-	"gemini-3.1-flash-lite": 0.88,
-};
-
-const IMAGE_MODEL_WEIGHTS = {
-	"gemini-3.5-flash-lite": 0.95,
-	"gemini-3.1-flash-lite": 0.88,
-};
 
 /*------[Aggregate Function (Logic Computation)]------*/
 
@@ -34,10 +23,11 @@ export function aggregate(promiseResults, mode)
 			continue ;
 		}
 
-
 		// Clean AI's message in case of any extra wording (mandatory for MiniMax)
 		let cleanMessage = AIMessage.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
 		cleanMessage = cleanMessage.replace(/```json\s*|```/g, '').trim();
+
+		//console.log(cleanMessage + '\n');
 
 		try
 		{
@@ -86,17 +76,9 @@ export function aggregate(promiseResults, mode)
 		throw new Error("ERROR: Invalid aggregate mode.");
 
 
+	// Ensure Model Weight is immutable
 	const modelWeights = chosenWeight;
 
-	// Scores for each verdict
-	const verdictTrustScores = {
-		TRUE: 100,
-		LIKELY_TRUE: 75,
-		PARTIALLY_TRUE: 50,
-		LIKELY_FALSE: 25,
-		FALSE: 0,
-		CANNOT_BE_VERIFIED: 0,
-	};
 
 	// aggregate() return format
 	let finalVerdict = {
@@ -106,7 +88,6 @@ export function aggregate(promiseResults, mode)
 	};
 
 
-	//continue here
 	if (significantVerdicts >= minSignificantVerdicts)
 	{
 		let totalTrustScore = 0;
@@ -116,9 +97,10 @@ export function aggregate(promiseResults, mode)
 		{
 			if (each.claim_verdict !== "CANNOT_BE_VERIFIED")
 			{
-				//try catch
 				totalTrustScore += (verdictTrustScores[each.claim_verdict] * modelWeights[each.model]);
 				totalModelWeight += modelWeights[each.model];
+				if (Number.isNaN(totalModelWeight))
+					throw new Error("ERROR: Total Trust Score computed a NaN.");
 			}
 		}
 		
@@ -158,23 +140,18 @@ export function aggregate(promiseResults, mode)
 	{
 		try
 		{
-			const individualResponse = { model: each.value.model, verdict: cleanJSONs[count].claim_verdict, green_flags: cleanJSONs[count].green_flags, red_flags: cleanJSONs[count].red_flags };
+			let individualResponse = { model: each.value.model, verdict: cleanJSONs[count].claim_verdict, green_flags: cleanJSONs[count].green_flags, red_flags: cleanJSONs[count].red_flags };
+
+			if (each.value.gonka_request_id)
+				individualResponse.gonka_request_id = each.value.gonka_request_id;
 
 			finalVerdict.individual_responses.push(individualResponse);
 		}
 		catch (error)
 		{
-			throw new Error("Either 'each' is invalid, or cleanJSONs is invalid ", error.message);
-
-			return NextResponse.json(
-				{ 
-					success: false, 
-					error: error.message
-				}, 
-				{ status: 500 }
-			);
+			throw new Error("Either 'each' is invalid, or cleanJSONs is invalid: " + error.message);
 		}
-		count++ ;
+		count++;
 	}
 
 	return finalVerdict; 
