@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import {
+  Chip,
   Donut,
   Micro,
   ModelCard,
@@ -24,9 +25,18 @@ import { useFlow } from "./flow";
  * from the fixture set for `state` otherwise, so each variant has a URL that
  * can be opened cold.
  */
+const IMAGE_VERDICT_TONE: Record<string, "t" | "f"> = {
+  TRUE: "t",
+  LIKELY_TRUE: "t",
+  PARTIALLY_TRUE: "f",
+  LIKELY_FALSE: "f",
+  FALSE: "f",
+  CANNOT_BE_VERIFIED: "f",
+};
+
 export function ResultPanel({ state }: { state: VerdictState }) {
   const t = useTranslations("App");
-  const { locale, verdictOr, objectId, reset, check, href } = useFlow();
+  const { locale, verdictOr, imageCheck, objectId, reset, check, href } = useFlow();
   const verdict = verdictOr(state);
   const scored = verdict.score !== null;
   const shareHref = href(`/card/${objectId ?? "0x7a3e4f19b8c2d05e"}`);
@@ -99,6 +109,19 @@ export function ResultPanel({ state }: { state: VerdictState }) {
           tone={verdict.tone}
           models={verdict.models}
         />
+      )}
+
+      {imageCheck && imageCheck.claim_verdict && (
+        <div className="grid gap-[10px]">
+          <Micro>{t("mImageCheck")}</Micro>
+          <div className="grid gap-[6px]">
+            <Chip tone={IMAGE_VERDICT_TONE[imageCheck.claim_verdict] ?? "f"}>
+              {imageCheck.claim_verdict.replaceAll("_", " ")}
+              {imageCheck.trust_score !== null ? ` · ${imageCheck.trust_score}%` : ""}
+            </Chip>
+            <p className="text-[12px] leading-[1.5] text-[#6b7280]">{t("mImageCheckNote")}</p>
+          </div>
+        </div>
       )}
 
       {verdict.state === "disputed" && verdict.positions && (

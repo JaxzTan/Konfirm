@@ -67,7 +67,7 @@ export const AI_MODELS = [
 	"gemini-3.5-flash-lite",
 ]
 
-export const CLAIM_MODEL_WEIGHTS = {
+export const CLAIM_MODEL_WEIGHTS: Record<string, number> = {
     "moonshotai/Kimi-K2.6": 1.0,
     "gemini-3.5-flash-lite": 0.95,
     "deepseek-ai/DeepSeek-V4-Flash-0731": 0.92,
@@ -75,13 +75,13 @@ export const CLAIM_MODEL_WEIGHTS = {
     "gemini-3.1-flash-lite": 0.88,
 };
 
-export const IMAGE_MODEL_WEIGHTS = {
+export const IMAGE_MODEL_WEIGHTS: Record<string, number> = {
     "gemini-3.5-flash-lite": 0.95,
     "gemini-3.1-flash-lite": 0.88,
 };
 
 // Scores for each verdict
-export const verdictTrustScores = {
+export const verdictTrustScores: Record<string, number> = {
     "TRUE": 100,
     "LIKELY_TRUE": 75,
     "PARTIALLY_TRUE": 50,

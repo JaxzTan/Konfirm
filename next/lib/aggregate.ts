@@ -1,13 +1,18 @@
-import { NextResponse } from "next/server";
-import { CLAIM_MODEL_WEIGHTS, IMAGE_MODEL_WEIGHTS, verdictTrustScores } from "./global_variables.ts";
+import { CLAIM_MODEL_WEIGHTS, IMAGE_MODEL_WEIGHTS, verdictTrustScores } from "./global_variables";
 
+type CleanVerdict = {
+	claim_verdict: "TRUE" | "LIKELY_TRUE" | "PARTIALLY_TRUE" | "LIKELY_FALSE" | "FALSE" | "CANNOT_BE_VERIFIED";
+	green_flags: string[];
+	red_flags: string[];
+	model: string;
+};
 
 /*------[Aggregate Function (Logic Computation)]------*/
 
-export function aggregate(promiseResults, mode)
+export function aggregate(promiseResults: PromiseFulfilledResult<any>[], mode: "claim" | "image")
 {
 	// Stores functional JSON objects containing verdict and flags returned from each model
-	let cleanJSONs = [];
+	let cleanJSONs: CleanVerdict[] = [];
 
 	// Collect verdicts of each model
 	for (const eachResult of promiseResults)
@@ -39,7 +44,7 @@ export function aggregate(promiseResults, mode)
 		catch (error)
 		{
 			// Issue with parsing JSON, AI may have returned a non-input or a non-JSON response
-			// Move on to the next completed model
+			console.error(`[aggregate] ${promiseValue.model} response failed to parse as JSON:`, cleanMessage);
 		}
 	}
 
@@ -49,7 +54,7 @@ export function aggregate(promiseResults, mode)
 	let significantVerdicts = 0;
 
 	// Determine verdict with the highest count
-	for (const each in cleanJSONs)
+	for (const each of cleanJSONs)
 	{
 		if (each.claim_verdict !== "CANNOT_BE_VERIFIED")
 			significantVerdicts++;
@@ -79,12 +84,17 @@ export function aggregate(promiseResults, mode)
 	// Ensure Model Weight is immutable
 	const modelWeights = chosenWeight;
 
+	type IndividualResponse = { model: string; verdict: string; green_flags: string[]; red_flags: string[] };
 
 	// aggregate() return format
-	let finalVerdict = {
-		"claim_verdict": null,
-		"trust_score": 0,
-		"individual_responses": []
+	let finalVerdict: {
+		claim_verdict: string | null;
+		trust_score: number | null;
+		individual_responses: IndividualResponse[];
+	} = {
+		claim_verdict: null,
+		trust_score: 0,
+		individual_responses: []
 	};
 
 
@@ -135,26 +145,21 @@ export function aggregate(promiseResults, mode)
 
 	/*------[Store individual verdict of each model]------*/
 
-	let count = 0;
-	for (const each of promiseResults)
+	// Built straight from cleanJSONs (not re-matched against promiseResults by
+	// index) since cleanJSONs already carries `.model` and only contains the
+	// responses that actually parsed — indexing by count would misalign the
+	// moment any one model's response failed to parse.
+	for (const each of cleanJSONs)
 	{
-		try
-		{
-			let individualResponse = { model: each.value.model, verdict: cleanJSONs[count].claim_verdict, green_flags: cleanJSONs[count].green_flags, red_flags: cleanJSONs[count].red_flags };
-
-			if (each.value.gonka_request_id)
-				individualResponse.gonka_request_id = each.value.gonka_request_id;
-
-			finalVerdict.individual_responses.push(individualResponse);
-		}
-		catch (error)
-		{
-			throw new Error("Either 'each' is invalid, or cleanJSONs is invalid: " + error.message);
-		}
-		count++;
+		finalVerdict.individual_responses.push({
+			model: each.model,
+			verdict: each.claim_verdict,
+			green_flags: each.green_flags,
+			red_flags: each.red_flags,
+		});
 	}
 
-	return finalVerdict; 
+	return finalVerdict;
 }
 
 

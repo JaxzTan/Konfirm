@@ -13,6 +13,24 @@ import { demoVerdict, verdictFromApi, type Verdict, type VerdictState } from "@/
 
 export type Mode = "text" | "link" | "photo";
 
+/** VirusTotal's `scan-link` result — a security check, not an AI verdict. */
+export type LinkCheck = {
+  rating: "SAFE" | "CAUTION" | "SUSPICIOUS" | "DANGEROUS" | "INSUFFICIENT_DATA";
+  score: number | null;
+  significantTriggered: boolean;
+  triggeredBy: string | null;
+  maliciousDetections: number;
+  suspiciousDetections: number;
+  totalActiveVendors: number;
+};
+
+/** The 2-model Gemini image-authenticity check — separate signal from the text verdict. */
+export type ImageCheck = {
+  claim_verdict: string | null;
+  trust_score: number | null;
+  individual_responses: { model: string; verdict: string; green_flags: string[]; red_flags: string[] }[];
+};
+
 /**
  * Flow state for the whole check, held in the (check) route group's layout.
  *
@@ -29,6 +47,7 @@ export type Mode = "text" | "link" | "photo";
  */
 type Flow = {
   locale: Locale;
+  mode: Mode;
   /** Path in the current locale — every internal link goes through this. */
   href: (path: string) => string;
 
@@ -41,6 +60,10 @@ type Flow = {
   verdict: Verdict | null;
   /** The live verdict if there is one, else the fixture for `fallback`. */
   verdictOr: (fallback: VerdictState) => Verdict;
+  /** VirusTotal result for link mode — shown alongside, never blended into, the text verdict. */
+  linkCheck: LinkCheck | null;
+  /** Gemini image-authenticity result for photo mode — shown alongside, never blended into, the text verdict. */
+  imageCheck: ImageCheck | null;
   objectId: string | null;
   error: string | null;
 
@@ -84,9 +107,14 @@ export function FlowProvider({
 function Provider({ locale, children }: { locale: Locale; children: ReactNode }) {
   const t = useTranslations("App");
   const router = useRouter();
-  // The input mode is the route (`/`, `/link`, `/photo`), so check() reads it
-  // off the path rather than the layout threading it down.
-  const mode = modeFromPath(usePathname());
+  // The input mode is the route (`/`, `/link`, `/photo`) while the user is on
+  // an input screen. But check() immediately navigates to `/checking` (and
+  // then `/result/…`), where the path no longer says which mode we came
+  // from — so `checkMode` freezes that choice the moment check() fires, and
+  // every downstream screen reads it instead of re-deriving from the path.
+  const pathMode = modeFromPath(usePathname());
+  const [checkMode, setCheckMode] = useState<Mode | null>(null);
+  const mode = checkMode ?? pathMode;
   const { isSignedIn } = useKonfirmIdentity();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
@@ -94,6 +122,8 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
+  const [linkCheck, setLinkCheck] = useState<LinkCheck | null>(null);
+  const [imageCheck, setImageCheck] = useState<ImageCheck | null>(null);
   const [objectId, setObjectId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -120,16 +150,39 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
     setPhotoDataUrl(null);
     setPhotoPreview(null);
     setVerdict(null);
+    setLinkCheck(null);
+    setImageCheck(null);
     setObjectId(null);
     setError(null);
+    setCheckMode(null);
     go("/");
   };
 
   const check = async () => {
     setError(null);
+    setLinkCheck(null);
+    setImageCheck(null);
+    setCheckMode(mode);
     go("/checking");
 
     try {
+      // Link mode asks a different question entirely — "is this domain
+      // malicious", not "is this claim true" — so it never touches the AI
+      // claim pipeline and never goes to confirm/signin/attest: there is no
+      // claim verdict to put on-chain.
+      if (mode === "link") {
+        const scan = await fetch("/api/scan-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ link: text }),
+        });
+        const scanBody = await scan.json();
+        if (!scanBody.success) throw new Error(scanBody.error ?? "Link scan failed.");
+        setLinkCheck(scanBody.data);
+        go("/result/link");
+        return;
+      }
+
       let claimText = text;
 
       if (mode === "photo") {
@@ -143,11 +196,28 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
         setText(claimText); // visible if the user switches back to Text mode
       }
 
-      const response = await fetch("/api/verdict", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: claimText, language: locale }),
-      });
+      // Image authenticity is a separate question from "is the claim true" —
+      // run it alongside the text verdict, never blended into it.
+      const imageSideCheck =
+        mode === "photo" && photoDataUrl
+          ? fetch("/api/verify-image", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ imageBase64: photoDataUrl }),
+            })
+              .then((r) => r.json())
+              .then((r) => (r.success ? setImageCheck(r.data) : null))
+              .catch((cause) => console.error("Image check failed:", cause))
+          : Promise.resolve();
+
+      const [response] = await Promise.all([
+        fetch("/api/verdict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: claimText, language: locale }),
+        }),
+        imageSideCheck,
+      ]);
       setVerdict(verdictFromApi(await response.json(), t));
 
       // Signing in is not consent to publish, so a signed-in user still lands
@@ -222,6 +292,7 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
 
   const value: Flow = {
     locale,
+    mode,
     href,
     text,
     setText,
@@ -230,6 +301,8 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
     setPhoto,
     verdict,
     verdictOr: (fallback) => verdict ?? demoVerdict(fallback, t),
+    linkCheck,
+    imageCheck,
     objectId,
     error,
     check,

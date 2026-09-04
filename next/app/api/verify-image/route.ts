@@ -1,79 +1,83 @@
 import OpenAI from "openai";
 import {IMAGE_SYSTEM_PROMPT, AI_MODELS} from "@/lib/global_variables";
 import { aggregate } from "@/lib/aggregate";
-import { NextResponse } from "next/server";
-
-import fs from 'fs';
-import path from 'path';
+import { NextRequest, NextResponse } from "next/server";
 
 // Response time limit before timeout
 export const maxDuration = 120;
 
-export async function POST(request)
+/**
+ * Runs the 2-model image check (Gemini only — the other three models don't
+ * accept image input) and returns Gilbert's aggregate() shape plus each
+ * fulfilled model's real completion ID. Exported so /api/verdict can call
+ * this directly without an HTTP round trip.
+ */
+export async function getImageVerdict(base64URL: string)
+{
+	const responses = [
+		sendPrompt(AI_MODELS[3], base64URL),
+		sendPrompt(AI_MODELS[4], base64URL),
+	];
+
+	// results will contain an array of promise responses
+	const results = await Promise.allSettled(responses);
+
+	let fulfilledPromises: PromiseFulfilledResult<any>[] = [];
+	for (const each of results)
+	{
+		if (each.status === "fulfilled")
+		{
+			fulfilledPromises.push(each);
+		}
+	}
+
+	if (fulfilledPromises.length === 0)
+		throw new Error("No fulfilled promises detected");
+
+	const finalVerdict = await aggregate(fulfilledPromises, "image");
+	const requestIds: Record<string, string> = {};
+	for (const each of fulfilledPromises)
+		requestIds[each.value.model] = each.value.id ?? "";
+
+	return { finalVerdict, requestIds };
+}
+
+export async function POST(request: NextRequest)
 {
     const body = await request.json();
-    const imageURL = body.imageURL;
+    const imageBase64 = body.imageBase64;
 
     // Verify incoming request is in the correct format
-    if (!imageURL) {
+    if (!imageBase64 || typeof imageBase64 !== "string") {
         return NextResponse.json(
             {
                 success: false,
-                error: "ERROR: Missing 'imageURL' parameter in request body.",
+                error: "ERROR: Missing 'imageBase64' parameter in request body.",
             },
             { status: 400 }
         );
     }
 
-	// Convert image into Base 64
-	const imagePath = path.join(process.cwd(), 'public', imageURL);
-	const imageBase64 = fs.readFileSync(imagePath, { encoding: 'base64' });
-	const base64URL = `data:image/png;base64,${imageBase64}`;
-
 	try
 	{
-		const responses = [
-			sendPrompt(AI_MODELS[3], base64URL),
-			sendPrompt(AI_MODELS[4], base64URL),
-		];
+		const { finalVerdict } = await getImageVerdict(imageBase64);
 
-		// results will contain an array of promise responses
-		const results = await Promise.allSettled(responses);
-
-		let fulfilledPromises = [];
-		for (const each of results)
-		{
-			if (each.status === "fulfilled")
+		return NextResponse.json(
 			{
-				fulfilledPromises.push(each);
-
-			}
-		}
-
-		if (fulfilledPromises.length > 0)
-		{
-			const finalVerdict = await aggregate(fulfilledPromises, "image");
-			
-			return NextResponse.json(
-				{
-					success: true, 
-					message: "SUCCESS: Final Verdict obtained.",
-					data: finalVerdict 
-				}, 
-				{ status: 201 }
-			); 
-		}
-		else
-			throw new Error("No fulfilled promises detected");
-
+				success: true,
+				message: "SUCCESS: Final Verdict obtained.",
+				data: finalVerdict
+			},
+			{ status: 201 }
+		);
 	}
 	catch (error)
 	{
 		return NextResponse.json(
-			{ 
-				success: false, 
-				error: error.message
-			}, 
+			{
+				success: false,
+				error: error instanceof Error ? error.message : "Unknown error."
+			},
 			{ status: 500 }
 		);
 	}
@@ -81,7 +85,7 @@ export async function POST(request)
 }
 
 /*------[Send User Prompt to a Model for processing]------*/
-async function sendPrompt(chosenModel, userInput)
+async function sendPrompt(chosenModel: string, userInput: string)
 {
 	const abortController = new AbortController();
 
@@ -92,7 +96,7 @@ async function sendPrompt(chosenModel, userInput)
 
 	const incomingPrompt = userInput;
 
-	let client = null;
+	let client: OpenAI | null = null;
 
 	// Initialize OpenAI client (similar to request header)
 	try
@@ -113,7 +117,7 @@ async function sendPrompt(chosenModel, userInput)
 	}
 	catch (error)
 	{
-		throw new Error("Client ERROR: " + error.message);
+		throw new Error("Client ERROR: " + (error instanceof Error ? error.message : "Unknown error."));
 	}
 
 	try
@@ -154,7 +158,7 @@ async function sendPrompt(chosenModel, userInput)
 	catch (error)
 	{
 		clearTimeout(timeoutID);
-		throw new Error(`ERROR: Request to ${chosenModel} was aborted due to: ` + error.message);
+		throw new Error(`ERROR: Request to ${chosenModel} was aborted due to: ` + (error instanceof Error ? error.message : "Unknown error."));
 	}
 }
 
