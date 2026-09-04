@@ -29,42 +29,46 @@ sui client gas                          # confirm balance
 ## 2. Move package — build / test / publish
 
 ```bash
-cd move/konfirm
+cd move
 sui move build
 sui move test
 sui client publish --gas-budget 100000000
 
 # from the publish output, grab:
-#   Published Objects → PackageID          → NEXT_PUBLIC_PACKAGE_ID
-#   Created Objects   → AttesterCap ObjectID
+#   Published Objects → PackageID → NEXT_PUBLIC_PACKAGE_ID
+# There is no capability object: registry.move has no Cap type, and
+# create_verdict is ungated on purpose (see the comment above it).
 export PKG=0x...
-export ATTESTER_CAP=0x...
 ```
 
 Inspect what got deployed:
 
 ```bash
 sui client object $PKG
-sui client object $ATTESTER_CAP
 ```
 
 ## 3. Smoke-test contract calls from CLI (before wiring frontend)
 
 ```bash
-# submit a verdict (adjust arg order to your Move signature)
+# create a verdict. Arg order matches create_verdict in
+# move/sources/registry.move — 11 args, then the shared Clock at 0x6.
+# vector<u8> takes a JSON array; vector<String> takes a JSON array of strings.
 sui client call \
-  --package $PKG --module verdict --function submit_verdict \
-  --args $ATTESTER_CAP "<claim_hash>" "<claim_text>" 18 "<walrus_blob_id>" <submitted_by_addr> \
+  --package $PKG --module registry --function create_verdict \
+  --args '[1,2,3]' 0 0 72 60 85 90 3 \
+         '["deepseek","kimi","qwen"]' '["req-1","req-2","req-3"]' \
+         "<walrus_blob_id>" 0x6 \
   --gas-budget 10000000
 
 # read it back
 export VERDICT_ID=0x...
 sui client object $VERDICT_ID --json
 
-# add a challenge (no cap needed — proves any address can append)
+# append a challenge (no cap needed — proves any address can append,
+# self-paid, which is exactly what FR-13 wants)
 sui client call \
-  --package $PKG --module verdict --function add_challenge \
-  --args $VERDICT_ID "<reason>" \
+  --package $PKG --module registry --function challenge \
+  --args $VERDICT_ID "<evidence_blob_id>" 0x6 \
   --gas-budget 10000000
 
 # query emitted events for off-chain indexing

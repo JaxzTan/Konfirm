@@ -172,15 +172,21 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lang: locale, result: verdict }),
       });
+      // Parse defensively: a 500 can come back as an HTML error page, and a
+      // raw SyntaxError here would bury the status code that explains it.
+      const args = await attestResponse.json().catch(() => ({}));
       if (!attestResponse.ok) {
-        const body = await attestResponse.json().catch(() => ({}));
-        throw new Error(body.error ?? `/api/attest returned ${attestResponse.status}`);
+        throw new Error(args.error ?? `/api/attest returned ${attestResponse.status}`);
       }
-      const args = await attestResponse.json();
+
+      const packageId = process.env.NEXT_PUBLIC_PACKAGE_ID;
+      if (!packageId || !/^0x[0-9a-fA-F]{64}$/.test(packageId)) {
+        throw new Error("NEXT_PUBLIC_PACKAGE_ID is missing or is not a 32-byte hex address.");
+      }
 
       const tx = new Transaction();
       tx.moveCall({
-        target: `${process.env.NEXT_PUBLIC_PACKAGE_ID}::registry::create_verdict`,
+        target: `${packageId}::registry::create_verdict`,
         arguments: [
           tx.pure.vector("u8", claimHash),
           tx.pure.u8(args.lang),
@@ -193,13 +199,13 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
           tx.pure.vector("string", args.models),
           tx.pure.vector("string", args.requestIds),
           tx.pure.string(args.traceBlob),
-          tx.object("0x6"), // Clock
+          tx.object.clock(),
         ],
       });
 
       const { createdObjects } = await signAndExecute({ transaction: tx });
       const created = createdObjects.find((o) =>
-        o.objectType.endsWith("::registry::Verdict"),
+        o.objectType.includes("::registry::Verdict"),
       );
       if (!created) {
         throw new Error("Transaction succeeded but no Verdict object was created.");

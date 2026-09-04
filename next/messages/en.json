@@ -98,6 +98,8 @@
     "copied": "Copied!",
     "signIn": "Sign in",
     "signOut": "Sign out",
-    "signedInAs": "Signed in as"
+    "signedInAs": "Signed in as",
+    "claimFingerprint": "Claim fingerprint",
+    "traceUnavailable": "The full reasoning trace could not be loaded right now. The on-chain record below is unaffected."
   }
 }
