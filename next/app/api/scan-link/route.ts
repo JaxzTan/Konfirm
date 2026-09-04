@@ -24,7 +24,6 @@ export async function POST(request)
 		const result = await obtainResult(returned.data.id);
 
 		const safetyScore = calculateSafetyScore(result.data.attributes);
-		console.log(safetyScore);
 
 
 		return NextResponse.json(
@@ -212,15 +211,3 @@ function calculateSafetyScore(linkAttributes)
 }
 
 
-/*
-		console.log("Program start!");
-
-		console.log("---[Submission Response]---");
-		console.log(returned);
-
-		console.log("---[GET Response]---");
-		console.log(JSON.stringify(result.data.attributes, null, 2));
-		
-		console.log("Program end\n");
-
-*/

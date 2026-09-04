@@ -45,21 +45,14 @@ export async function POST(request)
 		{
 			if (each.status === "fulfilled")
 			{
-				//console.log(`${each.value.model} responded`);
 				fulfilledPromises.push(each);
-				/*
-				console.log(`[Content]`);
-				console.log(`${each.value.choices[0].message.content}`);
-				console.log(`\n`);
-				*/
+
 			}
 		}
 
 		if (fulfilledPromises.length > 0)
 		{
-			//console.log(`Gonna run aggregate`);
 			const finalVerdict = await aggregate(fulfilledPromises, "image");
-			//console.log("\nFinal Verdict :\n" + `${JSON.stringify(finalVerdict, null, 2)}` + "\n");
 			
 			return NextResponse.json(
 				{

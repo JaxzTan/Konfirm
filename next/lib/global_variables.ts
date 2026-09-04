@@ -53,10 +53,10 @@ export const SUMMARY_AND_REFUTATION_SYSTEM_PROMPT = "" +
 	Mandatory Response Rules:
 	3. summary_flags
 		- An array strictly containing only 3 strings (max 10 words per string).
+		- summary_flag should summarize all green_flags and red_flags from all models, but should strictly be based on flags that align with the final claim_verdict.
 	2. polite_refutation
 		- A short 1 to 2 sentence conversational response politely asserting the obtained verdict. 
-	4. Returned flags and Polite Refutation MUST STRICTLY match the main language from the image: English / Bahasa Melayu / Simplified-Chinese.
-	5. Strictly do not describe the image, STRICTLY follow every Mandatory Response Rules and Response Format.
+	4. Returned flags and Polite Refutation MUST STRICTLY match the main language from either the Original Message (priority) or the red_flags & green_flags: English / Bahasa Melayu / Simplified-Chinese.
 	`;
 
 export const AI_MODELS = [
@@ -67,3 +67,25 @@ export const AI_MODELS = [
 	"gemini-3.5-flash-lite",
 ]
 
+export const CLAIM_MODEL_WEIGHTS = {
+    "moonshotai/Kimi-K2.6": 1.0,
+    "gemini-3.5-flash-lite": 0.95,
+    "deepseek-ai/DeepSeek-V4-Flash-0731": 0.92,
+    "MiniMaxAI/MiniMax-M2.7": 0.88,
+    "gemini-3.1-flash-lite": 0.88,
+};
+
+export const IMAGE_MODEL_WEIGHTS = {
+    "gemini-3.5-flash-lite": 0.95,
+    "gemini-3.1-flash-lite": 0.88,
+};
+
+// Scores for each verdict
+export const verdictTrustScores = {
+    "TRUE": 100,
+    "LIKELY_TRUE": 75,
+    "PARTIALLY_TRUE": 50,
+    "LIKELY_FALSE": 25,
+    "FALSE": 0,
+    "CANNOT_BE_VERIFIED": 0,
+};
