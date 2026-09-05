@@ -3,11 +3,31 @@ import type { Locale } from "@/lib/locale";
 
 export const VERDICT_STATES = [
   "false",
+  "likely_false",
+  "partially_true",
+  "likely_true",
   "true",
   "disputed",
   "unverifiable",
   "insufficient",
 ] as const;
+
+/** The 5 states that carry a real score, in the same order as aggregate.ts's
+ *  own buckets (finalTrustScore < 12.5/37.5/62.5/87.5) — kept together so a
+ *  raw score can be bucketed the same way everywhere it needs to (see
+ *  bucketStateFromScore()). */
+const SCORED_STATES = ["false", "likely_false", "partially_true", "likely_true", "true"] as const;
+
+/** Mirrors aggregate.ts's own bucket boundaries — used wherever a raw 0-100
+ *  score needs to become one of the 5 scored states, without re-deriving a
+ *  binary true/false and losing the distinction the backend already makes. */
+export function bucketStateFromScore(score: number): (typeof SCORED_STATES)[number] {
+  if (score < 12.5) return "false";
+  if (score < 37.5) return "likely_false";
+  if (score < 62.5) return "partially_true";
+  if (score < 87.5) return "likely_true";
+  return "true";
+}
 
 export type VerdictState = (typeof VERDICT_STATES)[number];
 
@@ -59,17 +79,27 @@ type ApiVerdict = {
   respondedModel?: { name: string; score: number; reasoning: string[]; requestId: string };
 };
 
+/** True-leaning half of the 5 scored states — everything else (including
+ *  partially_true, the genuinely ambiguous middle) reads as the "f" tone. */
+const TRUE_LEANING = new Set<VerdictState>(["true", "likely_true"]);
+
 /** Per-state copy that exists in every locale — the fallback when the LLM's own wording cannot be used. */
-const TITLE_KEY: Record<VerdictState, string> = {
+export const TITLE_KEY: Record<VerdictState, string> = {
   true: "verdictTrue",
+  likely_true: "verdictLikelyTrue",
+  partially_true: "verdictPartiallyTrue",
+  likely_false: "verdictLikelyFalse",
   false: "verdictFalse",
   disputed: "verdictDisputed",
   unverifiable: "verdictUnverifiable",
   insufficient: "verdictInsufficient",
 };
 
-const DESC_KEY: Record<VerdictState, string> = {
+export const DESC_KEY: Record<VerdictState, string> = {
   true: "descTrue",
+  likely_true: "descLikelyTrue",
+  partially_true: "descPartiallyTrue",
+  likely_false: "descLikelyFalse",
   false: "descFalse",
   disputed: "descDisputed",
   unverifiable: "descUnverifiable",
@@ -84,7 +114,7 @@ const DESC_KEY: Record<VerdictState, string> = {
  */
 export function verdictFromApi(api: ApiVerdict, t: T, locale: Locale): Verdict {
   const state = resolveVerdictState(api.state);
-  const tone: Tone = state === "true" ? "t" : "f";
+  const tone: Tone = TRUE_LEANING.has(state) ? "t" : "f";
   const title = api.verdict ?? t(TITLE_KEY[state]);
 
   const responded = api.respondedModel;

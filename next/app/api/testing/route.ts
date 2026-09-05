@@ -11,6 +11,8 @@ export async function GET()
 	{
 		console.log("Program start!\n");
 
+		// Declared outside the commented-out blocks below: whichever test path
+		// is active, the sum-and-refute call further down still needs it.
 		const userClaim = test_inputs.chcorrect1;
 
 		/*
