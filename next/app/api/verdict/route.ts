@@ -36,17 +36,33 @@ const VERDICT_SCORES: Record<string, number> = {
   CANNOT_BE_VERIFIED: 0,
 };
 
-function stateFromVerdict(claimVerdict: string | null): "true" | "false" | "unverifiable" {
-  if (claimVerdict === "CANNOT_BE_VERIFIED" || claimVerdict === null) return "unverifiable";
-  const score = VERDICT_SCORES[claimVerdict] ?? 0;
-  return score >= 50 ? "true" : "false";
+// The frontend shows all 5 of aggregate.ts's own buckets, not a collapsed
+// true/false — passing the label straight through instead of re-deriving
+// true/false from a separate score threshold that could drift out of sync
+// with aggregate.ts's own boundaries.
+type VerdictState = "true" | "likely_true" | "partially_true" | "likely_false" | "false" | "unverifiable";
+
+const STATE_FROM_CLAIM_VERDICT: Record<string, VerdictState> = {
+  TRUE: "true",
+  LIKELY_TRUE: "likely_true",
+  PARTIALLY_TRUE: "partially_true",
+  LIKELY_FALSE: "likely_false",
+  FALSE: "false",
+  CANNOT_BE_VERIFIED: "unverifiable",
+};
+
+const TRUE_LEANING = new Set<VerdictState>(["true", "likely_true"]);
+
+function stateFromVerdict(claimVerdict: string | null): VerdictState {
+  if (claimVerdict === null) return "unverifiable";
+  return STATE_FROM_CLAIM_VERDICT[claimVerdict] ?? "unverifiable";
 }
 
-function describe(state: string, greenFlags: string[], redFlags: string[], language: ReturnType<typeof resolveLocale>): string {
+function describe(state: VerdictState, greenFlags: string[], redFlags: string[], language: ReturnType<typeof resolveLocale>): string {
   if (state === "unverifiable") {
     return messagesByLocale[language].App.descUnverifiable;
   }
-  const flags = state === "true" ? greenFlags : redFlags;
+  const flags = TRUE_LEANING.has(state) ? greenFlags : redFlags;
   return flags.slice(0, 2).join(". ") || "";
 }
 
@@ -81,7 +97,7 @@ export async function POST(request: NextRequest) {
       state,
       score: finalVerdict.trust_score,
       description: describe(state, allGreen, allRed, language),
-      flags: state === "true" ? allGreen : state === "false" ? allRed : [],
+      flags: state === "unverifiable" ? [] : TRUE_LEANING.has(state) ? allGreen : allRed,
       models,
       modelCount: models.length,
     });

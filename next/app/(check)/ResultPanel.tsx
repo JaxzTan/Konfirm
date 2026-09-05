@@ -12,7 +12,6 @@ import {
   ModelCard,
   Panel,
   Serif,
-  SignalsAndModels,
   Spinner,
   Warn,
   btn,
@@ -184,17 +183,24 @@ export function ResultPanel() {
                   <li key={i}>{f}</li>
                 ))}
               </ul>
-              <div className="grid gap-[6px] rounded-xl bg-[#f7f5ef] p-[12px]">
-                <p className="text-[13.5px] leading-[1.55] text-[#0f2e23]">
-                  {refutation.politeRefutation}
-                </p>
-                <button
-                  type="button"
-                  onClick={handleCopyRefutation}
-                  className="justify-self-end text-[12px] font-semibold text-[#1f4d3d] hover:underline"
-                >
-                  {copiedRefutation ? t("copied") : t("copyRefutation")}
-                </button>
+              <div className="grid gap-[8px] pt-[6px]">
+                <Micro>{t("mPoliteRefutation")}</Micro>
+                {/* Deliberately not styled like the AI verdict above — this is
+                    a message the user can send, not a judgment, so it reads
+                    as a quoted note (accent border, no tone color) instead
+                    of a green/red result card. */}
+                <div className="grid gap-[8px] rounded-xl border border-dotted border-[#c98a3a]/50 bg-white p-[12px]">
+                  <p className="text-[13.5px] italic leading-[1.55] text-[#5c4626]">
+                    “{refutation.politeRefutation}”
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCopyRefutation}
+                    className="justify-self-end text-[12px] font-semibold text-[#8a5a1f] hover:underline"
+                  >
+                    {copiedRefutation ? t("copied") : t("copyRefutation")}
+                  </button>
+                </div>
               </div>
             </>
           ) : null}
@@ -202,12 +208,14 @@ export function ResultPanel() {
       )}
 
       {scored && (
-        <SignalsAndModels
-          labels={{ signals: t("mKeySignals"), models: t("mModels") }}
-          signals={verdict.signals}
-          tone={verdict.tone}
-          models={verdict.models}
-        />
+        <div className="grid gap-[10px]">
+          <Micro>{t("mModels")}</Micro>
+          <div className="grid gap-[9px]">
+            {verdict.models.map((m) => (
+              <ModelCard key={m.name} model={m} />
+            ))}
+          </div>
+        </div>
       )}
 
       {imageCheck && imageCheck.claim_verdict && (

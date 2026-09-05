@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createTranslator } from "next-intl";
@@ -11,6 +12,52 @@ import {
   STATE_INSUFFICIENT,
 } from "@/lib/sui/verdict";
 import { headingFont, messagesByLocale, resolveLocale, TIME_ZONE } from "@/lib/locale";
+import { bucketStateFromScore, TITLE_KEY, VERDICT_STATES, type VerdictState } from "@/lib/fixtures";
+import { getCard } from "@/lib/card";
+
+/**
+ * Same Open Graph treatment as /card/[objectId] — this is the durable public
+ * link (the one people actually bookmark/paste long after the initial
+ * share), so it needs its own real preview too, not just the card's.
+ */
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ objectId: string }>;
+  searchParams: Promise<{ lang?: string }>;
+}): Promise<Metadata> {
+  const { objectId } = await params;
+  const locale = resolveLocale((await searchParams).lang);
+  const card = await getCard(objectId);
+  if (!card) return {};
+
+  const messages = messagesByLocale[locale].App;
+  const headline =
+    card.state === "true" ? messages.verdictTrue : card.state === "false" ? messages.verdictFalse : messages.verdictUnverifiable;
+  const description = card.description ?? messages.cardBody;
+  const imageUrl = `/api/card/${objectId}?lang=${locale}`;
+
+  return {
+    title: `Konfirm — ${headline}`,
+    description,
+    openGraph: {
+      title: `Konfirm — ${headline}`,
+      description,
+      images: [{ url: imageUrl, width: 1080, height: 1080 }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `Konfirm — ${headline}`,
+      description,
+      images: [imageUrl],
+    },
+  };
+}
+
+/** True-leaning half of the 5 scored states — mirrors fixtures.ts's own set,
+ *  not exported from there since it's only needed alongside a live t(). */
+const TRUE_LEANING = new Set<VerdictState>(["true", "likely_true"]);
 
 type ModelResult = {
   model: string;
@@ -24,12 +71,14 @@ type ModelResult = {
 
 type Verdict = {
   objectId: string;
-  state: "true" | "false" | "disputed" | "unavailable" | "insufficient";
+  state: VerdictState;
   score: number | null;
   /** Empty when the Walrus trace couldn't be read — the chain has no prose. */
   description: string;
-  /** sha256(normalize(text) || lang). The claim text itself is stored nowhere. */
+  /** sha256(normalize(text) || lang) — the chain's own identifier for the claim. */
   claimHashHex: string;
+  /** The message that was checked, from the Walrus trace. Empty when the blob is unreadable. */
+  claim: string;
   modelCount: number;
   flags: string[];
   models: ModelResult[];
@@ -40,29 +89,33 @@ type Verdict = {
 };
 
 /**
- * Splits the on-chain STATE_VERDICT into the page's "true"/"false" halves.
+ * Splits the on-chain STATE_VERDICT into one of the 5 scored states.
  *
- * The chain deliberately does not store that label — normalizeVerdictArgs maps
- * both to STATE_VERDICT and keeps only the numeric score, so the label has to
- * come back from somewhere. The Walrus trace carries the original string; the
- * score threshold is the fallback for when the trace is unreadable.
+ * The chain deliberately does not store the granular label — normalizeVerdictArgs
+ * maps every scored outcome to STATE_VERDICT and keeps only the numeric score,
+ * so the label has to come back from somewhere. The Walrus trace carries the
+ * original string (already one of aggregate.ts's buckets); bucketStateFromScore()
+ * — the same boundaries aggregate.ts itself uses — is the fallback for when the
+ * trace is unreadable, so this page never falls back to a plain true/false split.
  */
 function displayState(
   state: number,
   score: number | null,
   traceState?: unknown,
-): Verdict["state"] {
-  if (traceState === "true" || traceState === "false") return traceState;
+): VerdictState {
+  if (typeof traceState === "string" && (VERDICT_STATES as readonly string[]).includes(traceState)) {
+    return traceState as VerdictState;
+  }
 
   switch (state) {
     case STATE_VERDICT:
-      return score !== null && score >= 50 ? "true" : "false";
+      return score !== null ? bucketStateFromScore(score) : "unverifiable";
     case STATE_DISPUTED:
       return "disputed";
     case STATE_INSUFFICIENT:
       return "insufficient";
     default:
-      return "unavailable";
+      return "unverifiable";
   }
 }
 
@@ -98,6 +151,7 @@ async function getVerdict(objectId: string): Promise<Verdict | null> {
     score: onChain.score,
     description: typeof trace?.description === "string" ? trace.description : "",
     claimHashHex: onChain.claimHashHex,
+    claim: typeof trace?.claim === "string" ? trace.claim : "",
     modelCount: onChain.modelCount,
     flags: Array.isArray(trace?.flags) ? (trace.flags as string[]) : [],
     // Driven by the on-chain models list, not the trace's: the chain is the
@@ -137,11 +191,9 @@ export default async function VerifyPage({
   const verdict = await getVerdict(objectId);
   if (!verdict) notFound();
 
-  const scored = verdict.state === "true" || verdict.state === "false";
-  const tone = verdict.state === "true" ? "t" : "f";
-  const title = scored
-    ? t(verdict.state === "true" ? "verdictTrue" : "verdictFalse")
-    : t("verdictUnverifiable");
+  const scored = verdict.score !== null;
+  const tone = TRUE_LEANING.has(verdict.state) ? "t" : "f";
+  const title = t(TITLE_KEY[verdict.state]);
 
   const explorerUrl = `https://suiscan.xyz/testnet/object/${verdict.objectId}`;
   const recordedAt = new Date(verdict.createdAtMs).toLocaleString(
@@ -162,8 +214,20 @@ export default async function VerifyPage({
       </header>
 
       <div className="grid gap-4 bg-gradient-to-b from-[#0f2e23] to-[#1f4d3d] px-5 py-[22px]">
-        {/* The claim text is stored nowhere — only its hash goes on chain, so
-            the fingerprint is all there is to identify what was checked. */}
+        {/* What was checked, then how it is identified on chain. The claim
+            comes from the Walrus trace and can be missing when the blob is
+            unreadable; the hash comes from the chain and always is. */}
+        {verdict.claim && (
+          <div className="grid gap-[6px]">
+            <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[#9ca3af]">
+              {t("claimChecked")}
+            </p>
+            <p className="whitespace-pre-wrap text-[13.5px] leading-[1.55] text-[#f7f5ef]">
+              {verdict.claim}
+            </p>
+          </div>
+        )}
+
         <div className="grid gap-[6px]">
           <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[#9ca3af]">
             {t("claimFingerprint")}

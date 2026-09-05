@@ -238,7 +238,7 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
       const attestResponse = await fetch("/api/attest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lang: locale, result: verdict }),
+        body: JSON.stringify({ lang: locale, result: verdict, claim: text }),
       });
       // Parse defensively: a 500 can come back as an HTML error page, and a
       // raw SyntaxError here would bury the status code that explains it.
