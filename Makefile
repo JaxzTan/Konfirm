@@ -1,13 +1,11 @@
 # Konfirm — docker stack: nginx (TLS, host :80/:443) -> nextjs (internal :3400)
 #
-# next/.env is the single source of truth: it feeds both the build args
-# (--env-file, for NEXT_PUBLIC_* inlined into the client bundle) and the
+# .env at the repo root is the single source of truth: it feeds both the build
+# args (--env-file, for NEXT_PUBLIC_* inlined into the client bundle) and the
 # container runtime environment (env_file in docker-compose.yml).
 
 NAME     := konfirm
-# Root .env first, next/.env second so it wins on shared keys — the same
-# precedence docker-compose.yml's env_file list uses. NGROK lives in root.
-COMPOSE  := docker compose --env-file .env --env-file next/.env
+COMPOSE  := docker compose --env-file .env
 CERT_DIR := nginx/certs
 CERT     := $(CERT_DIR)/localhost.pem
 CERT_KEY := $(CERT_DIR)/localhost-key.pem
@@ -52,7 +50,7 @@ tunnel: all ## Expose the running stack publicly through ngrok
 	@$(MAKE) --no-print-directory tunnel-url
 
 tunnel-url: ## Print the current public ngrok URL
-	@URL=$$(grep -h '^NGROK_DOMAIN=.' .env next/.env 2>/dev/null | tail -1 | cut -d= -f2-); \
+	@URL=$$(grep -h '^NGROK_DOMAIN=.' .env 2>/dev/null | cut -d= -f2-); \
 	if [ -n "$$URL" ]; then \
 	  URL="https://$$URL"; \
 	else \

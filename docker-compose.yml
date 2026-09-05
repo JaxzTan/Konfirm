@@ -8,22 +8,16 @@ services:
         NEXT_PUBLIC_SUI_NETWORK: ${NEXT_PUBLIC_SUI_NETWORK}
         NEXT_PUBLIC_SUI_RPC: ${NEXT_PUBLIC_SUI_RPC}
         NEXT_PUBLIC_PACKAGE_ID: ${NEXT_PUBLIC_PACKAGE_ID}
-        NEXT_PUBLIC_REGISTRY_ID: ${NEXT_PUBLIC_REGISTRY_ID}
         NEXT_PUBLIC_WALRUS_AGGREGATOR: ${NEXT_PUBLIC_WALRUS_AGGREGATOR}
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
-        NEXT_PUBLIC_FACEBOOK_CLIENT_ID: ${NEXT_PUBLIC_FACEBOOK_CLIENT_ID}
         NEXT_PUBLIC_ENOKI_API_KEY: ${NEXT_PUBLIC_ENOKI_API_KEY}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://localhost}
     image: konfirm-nextjs
     container_name: konfirm-nextjs
-    # Runtime secrets. next/.env is in .dockerignore on purpose — never baked
-    # into the image, only mounted as environment at container start.
+    # Runtime secrets. .env is gitignored and never baked into the image —
+    # it is only mounted as environment at container start.
     env_file:
-      # Root .env is optional and loaded first; next/.env wins on conflicts
-      # (it is what `next dev` reads, so it stays the source of truth).
       - path: ./.env
-        required: false
-      - path: ./next/.env
         required: true
     restart: unless-stopped
     # Internal-only: nginx is the sole thing bound to the host. Reach the app
