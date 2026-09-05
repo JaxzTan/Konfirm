@@ -56,6 +56,28 @@ services:
       nextjs:
         condition: service_healthy
 
+  # Public tunnel to nginx. Started only by `make tunnel` (compose profile),
+  # never by `make all` — it publishes the whole app to the internet.
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: konfirm-ngrok
+    profiles: ['tunnel']
+    # Port 80, not 443: ngrok terminates TLS at its own edge and forwards
+    # plain HTTP, which nginx recognises via X-Forwarded-Proto rather than
+    # redirecting back to HTTPS.
+    #
+    # NGROK_DOMAIN pins the account's reserved domain. Without it every run
+    # gets a fresh random hostname, which breaks Google OAuth and Enoki — both
+    # allowlist an exact origin. `$$` is escaped so compose leaves the
+    # expansion to the container's shell.
+    entrypoint: ['/bin/sh', '-c']
+    command: ['exec ngrok http nginx:80 --log=stdout --log-format=logfmt $${NGROK_DOMAIN:+--url https://$$NGROK_DOMAIN}']
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK:-}
+      NGROK_DOMAIN: ${NGROK_DOMAIN:-}
+    depends_on:
+      - nginx
+
 networks:
   default:
     name: konfirm

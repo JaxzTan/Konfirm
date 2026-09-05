@@ -6,6 +6,7 @@ import ShareButtons from "./ShareButtons";
 import { Warn } from "@/app/components/ui";
 import { headingFont, messagesByLocale, resolveLocale, TIME_ZONE } from "@/lib/locale";
 import { getCard } from "@/lib/card";
+import { siteHost } from "@/lib/site-url";
 
 /**
  * Open Graph tags so pasting this link into WhatsApp/Telegram/iMessage shows
@@ -78,13 +79,7 @@ export default async function CardPage({
         ? t("verdictFalse")
         : t("verdictUnverifiable");
   const verifyPath = `/v/${card.objectId}?lang=${locale}`;
-  // `||` not `??`: an unset var reads as "" here, not undefined/null, which
-  // `??` would let through unchanged — silently producing a domain-less URL.
-  const origin = (process.env.NEXT_PUBLIC_SITE_URL || "https://konfirm.my").replace(
-    /^https?:\/\//,
-    "",
-  );
-  const verifyUrl = `${origin}/v/${card.objectId}`;
+  const verifyUrl = `${siteHost()}/v/${card.objectId}`;
 
   return (
     <div className="grid flex-1 content-center gap-[18px] bg-[#f7f5ef] px-5 py-[26px]">

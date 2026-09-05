@@ -16,7 +16,7 @@
     "cta": "✓ 立即核实",
     "footnote": "由 DeepSeek、Kimi、MiniMax 通过 Gonka Router 核实",
     "loading": "正在用 AI 模型核实…",
-    "loadingSub": "通常需要 10-20 秒",
+    "loadingSub": "Ai 正在处理...",
     "loadingLink": "正在使用 VirusTotal 扫描...",
     "loadingLinkSub": "最多可能需要一分钟",
     "gateTitle": "还有一步就能看到结果",

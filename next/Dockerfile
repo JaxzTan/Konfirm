@@ -60,6 +60,31 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# tesseract.js in full, on top of the trimmed copy standalone produces.
+#
+# The OCR worker is a child process that does `require('..')` from
+# src/worker-script/node/index.js at runtime (line 15). Next's file tracer
+# only follows static imports, so it never sees that and leaves
+# src/worker-script/index.js out — the worker then dies with
+# "Cannot find module '..'" and /api/ocr returns nothing at all.
+# serverExternalPackages in next.config.ts stops it being bundled; it does
+# not make the tracer copy the files.
+# tesseract.js pulls these in from the worker at runtime too (node-fetch has
+# its own transitive deps, hence the last three). Listed explicitly rather
+# than copying all of node_modules, which would undo standalone entirely.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/tesseract.js ./node_modules/tesseract.js
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/tesseract.js-core ./node_modules/tesseract.js-core
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/bmp-js ./node_modules/bmp-js
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/idb-keyval ./node_modules/idb-keyval
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/is-url ./node_modules/is-url
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/node-fetch ./node_modules/node-fetch
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/regenerator-runtime ./node_modules/regenerator-runtime
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/wasm-feature-detect ./node_modules/wasm-feature-detect
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/zlibjs ./node_modules/zlibjs
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/whatwg-url ./node_modules/whatwg-url
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/tr46 ./node_modules/tr46
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/webidl-conversions ./node_modules/webidl-conversions
+
 USER nextjs
 
 EXPOSE 3400

@@ -2,6 +2,7 @@ import { ImageResponse } from "next/og";
 
 import { getCard, type Card } from "@/lib/card";
 import { messagesByLocale, resolveLocale, type Locale } from "@/lib/locale";
+import { siteHost } from "@/lib/site-url";
 
 /** Square: forwards as a photo in a WhatsApp thread without being cropped. */
 const SIZE = 1080;
@@ -182,9 +183,7 @@ export async function GET(
   const claimLabel = m.claimChecked;
   const warnLabel = m.cardWarn;
 
-  // `||` not `??`: an unset var reads as "" here, not undefined/null.
-  const origin = (process.env.NEXT_PUBLIC_SITE_URL || "https://konfirm.my").replace(/^https?:\/\//, "");
-  const verifyUrl = `${origin}/v/${card.objectId}`;
+  const verifyUrl = `${siteHost()}/v/${card.objectId}`;
 
   // One request, subset to exactly what this card draws.
   const glyphs = `Konfirm${headline}${body}${card.claim}${claimLabel}${warnLabel}${verifyUrl}`.toUpperCase() +
