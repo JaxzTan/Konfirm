@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { NextIntlClientProvider, useTranslations } from "next-intl";
 import { Transaction } from "@mysten/sui/transactions";
@@ -9,7 +9,7 @@ import { useKonfirmIdentity } from "@/lib/signer";
 import { useSignAndExecuteTransaction } from "@/lib/sui/useSignAndExecuteTransaction";
 import { computeClaimHash } from "@/lib/attest/claimHash";
 import { messagesByLocale, TIME_ZONE, type Locale } from "@/lib/locale";
-import { verdictFromApi, type Verdict } from "@/lib/fixtures";
+import { localizeVerdict, verdictFromApi, type Verdict } from "@/lib/fixtures";
 
 export type Mode = "text" | "link" | "photo";
 
@@ -216,7 +216,7 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
         }),
         imageSideCheck,
       ]);
-      setVerdict(verdictFromApi(await response.json(), t));
+      setVerdict(verdictFromApi(await response.json(), t, locale));
 
       // Signing in is not consent to publish, so a signed-in user still lands
       // on the confirm screen — they only skip the gate.
@@ -288,6 +288,14 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
     }
   };
 
+  // The verdict's prose is frozen in the locale it was generated in; the rest
+  // of the screen follows the language switcher. Reconciling here means every
+  // consumer reads one already-consistent verdict.
+  const shownVerdict = useMemo(
+    () => (verdict ? localizeVerdict(verdict, locale, t) : null),
+    [verdict, locale, t],
+  );
+
   const value: Flow = {
     locale,
     mode,
@@ -297,7 +305,7 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
     photoDataUrl,
     photoPreview,
     setPhoto,
-    verdict,
+    verdict: shownVerdict,
     linkCheck,
     imageCheck,
     objectId,
