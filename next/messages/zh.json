@@ -104,6 +104,7 @@
     "historyCopy": "复制",
     "historyCopied": "已复制",
     "historyView": "查看记录",
-    "historyChallenges": "{count} 项异议"
+    "historyChallenges": "{count} 项异议",
+    "sharePreparing": "正在生成图片…"
   }
 }

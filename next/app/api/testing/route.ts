@@ -1,8 +1,8 @@
 //import * as tests from "";
-import * as test_inputs from "./test_inputs.ts";
-import * as test_images from "./test_images.ts";
-import * as test_links from "./test_links.ts";
-import * as test_verdicts from "./test_verdicts.ts";
+import * as test_inputs from "./test_inputs";
+import * as test_images from "./test_images";
+import * as test_links from "./test_links";
+import * as test_verdicts from "./test_verdicts";
 import { NextResponse } from "next/server";
 
 export async function GET()
@@ -11,9 +11,11 @@ export async function GET()
 	{
 		console.log("Program start!\n");
 
-		/*
+		// Declared outside the commented-out blocks below: whichever test path
+		// is active, the sum-and-refute call further down still needs it.
 		const userClaim = test_inputs.chcorrect1;
 
+		/*
 		// Verify Claim
 		const response = await fetch(`https://localhost:3400/api/verify-claim`, {
 			method: "POST",
@@ -109,7 +111,7 @@ export async function GET()
 		return NextResponse.json(
 			{
 				success: false,
-				error: error.message
+				error: error instanceof Error ? error.message : String(error)
 			}, 
 			{ status: 500 }
 		);

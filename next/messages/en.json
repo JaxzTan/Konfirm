@@ -104,6 +104,7 @@
     "historyCopy": "Copy",
     "historyCopied": "Copied",
     "historyView": "View record",
-    "historyChallenges": "{count} challenged"
+    "historyChallenges": "{count} challenged",
+    "sharePreparing": "Preparing image..."
   }
 }
