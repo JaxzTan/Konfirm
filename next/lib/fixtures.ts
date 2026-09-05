@@ -137,7 +137,7 @@ export function localizeVerdict(verdict: Verdict, locale: Locale, t: T): Verdict
     title: t(TITLE_KEY[verdict.state]),
     description: t(DESC_KEY[verdict.state]),
     signals: [],
-    models: verdict.models.map((m) => ({ ...m, reasoning: "" })),
+    models: verdict.models.map((m) => ({ ...m, reasoning: [] })),
     positions: undefined,
   };
 }
