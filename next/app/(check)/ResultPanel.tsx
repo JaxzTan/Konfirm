@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -40,12 +40,48 @@ const IMAGE_VERDICT_TONE: Record<string, "t" | "f"> = {
 
 export function ResultPanel() {
   const t = useTranslations("App");
-  const { locale, verdict, imageCheck, objectId, reset, check, href } = useFlow();
+  const { locale, text, verdict, imageCheck, objectId, reset, check, href } = useFlow();
   const router = useRouter();
+  const [refutation, setRefutation] = useState<{ summaryFlags: string[]; politeRefutation: string } | null>(null);
+  const [refutationLoading, setRefutationLoading] = useState(false);
 
   useEffect(() => {
     if (!verdict) router.replace(href("/"));
   }, [verdict, href, router]);
+
+  // Fires only for a definitive true/false verdict — a plain-language
+  // summary and a polite rebuttal message only make sense once there's an
+  // actual verdict to summarize. Loaded after the verdict itself so the
+  // main result never waits on this second, purely supplementary call.
+  useEffect(() => {
+    if (!verdict || verdict.score === null) return;
+    setRefutationLoading(true);
+    fetch("/api/sum-and-refute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        original_message: text,
+        final_verdict: JSON.stringify({
+          state: verdict.state,
+          score: verdict.score,
+          flags: verdict.signals,
+          models: verdict.models,
+        }),
+        language: locale,
+      }),
+    })
+      .then((r) => r.json())
+      .then((r) => {
+        if (r.success) {
+          setRefutation({
+            summaryFlags: r.data.summary_flags ?? [],
+            politeRefutation: r.data.polite_refutation ?? "",
+          });
+        }
+      })
+      .catch((cause) => console.error("Summary/refutation failed:", cause))
+      .finally(() => setRefutationLoading(false));
+  }, [verdict, text]);
 
   if (!verdict) return <Spinner locale={locale} title={t("loading")} sub="" />;
 
@@ -120,6 +156,30 @@ export function ResultPanel() {
           tone={verdict.tone}
           models={verdict.models}
         />
+      )}
+
+      {scored && (
+        <div className="grid gap-[10px]">
+          <Micro>{t("mSummary")}</Micro>
+          {refutationLoading ? (
+            <div className="grid gap-2">
+              <div className="h-3 w-full animate-pulse rounded-full bg-[#ece9e0]" />
+              <div className="h-3 w-5/6 animate-pulse rounded-full bg-[#ece9e0]" />
+              <div className="h-3 w-2/3 animate-pulse rounded-full bg-[#ece9e0]" />
+            </div>
+          ) : refutation ? (
+            <>
+              <ul className="grid list-disc gap-1 pl-[18px] text-[13px] leading-[1.55] text-[#6b7280]">
+                {refutation.summaryFlags.map((f, i) => (
+                  <li key={i}>{f}</li>
+                ))}
+              </ul>
+              <p className="rounded-xl bg-[#f7f5ef] p-[12px] text-[13.5px] leading-[1.55] text-[#0f2e23]">
+                {refutation.politeRefutation}
+              </p>
+            </>
+          ) : null}
+        </div>
       )}
 
       {imageCheck && imageCheck.claim_verdict && (

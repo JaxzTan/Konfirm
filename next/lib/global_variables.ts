@@ -69,24 +69,27 @@ export function imageSystemPrompt(language: string): string {
 	return IMAGE_SYSTEM_PROMPT_BASE + languageDirective(language);
 }
 
-export const SUMMARY_AND_REFUTATION_SYSTEM_PROMPT = "" + 
-	`You are Konfirm, an AI agent designed to verify information obtained from various social media platforms (WhatsApp, Facebook, Instagram, etc.). 
+const SUMMARY_AND_REFUTATION_SYSTEM_PROMPT_BASE = "" +
+	`You are Konfirm, an AI agent designed to verify information obtained from various social media platforms (WhatsApp, Facebook, Instagram, etc.).
 
 	Response Format:
 	- Respond strictly as a JSON object with following format, do not include markdown headers or introduction text:
 	{
 	  "summary_flags": ["", "", ""],
-	  "polite_refutation": "",
+	  "polite_refutation": ""
 	}
-	
+
 	Mandatory Response Rules:
 	3. summary_flags
 		- An array strictly containing only 3 strings (max 10 words per string).
 		- summary_flag should summarize all green_flags and red_flags from all models, but should strictly be based on flags that align with the final claim_verdict.
 	2. polite_refutation
-		- A short 1 to 2 sentence conversational response politely asserting the obtained verdict. 
-	4. Returned flags and Polite Refutation MUST STRICTLY match the main language from either the Original Message (priority) or the red_flags & green_flags: English / Bahasa Melayu / Simplified-Chinese.
+		- A short 1 to 2 sentence conversational response politely asserting the obtained verdict.
 	`;
+
+export function summaryRefutationSystemPrompt(language: string): string {
+	return SUMMARY_AND_REFUTATION_SYSTEM_PROMPT_BASE + languageDirective(language);
+}
 
 export const AI_MODELS = [
 	"moonshotai/Kimi-K2.6", 

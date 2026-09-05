@@ -49,6 +49,7 @@
     "oneModel": "Only 1 model participated",
     "mKeySignals": "Key signals",
     "mModels": "What each model found",
+    "mSummary": "Summary",
     "mPositions": "Two positions",
     "mFound": "What we found",
     "mChain": "On-chain record",
@@ -65,8 +66,6 @@
     "mImageCheckNote": "Not the claim verdict — a separate signal on whether the photo itself looks authentic or edited.",
     "sideFalse": "Reads as false",
     "sideTrue": "Reads as true",
-    "posFalse": "The figure is real but restated as an unannounced 2026 policy — misleading as forwarded.",
-    "posTrue": "The numbers match a published budget document; the message is badly worded rather than false.",
     "unvTitle": "Not enough to judge",
     "unvBody": "Absence of proof is not proof that it is false. Treat it with care and ask for a source.",
     "insTitle": "Try checking again",
@@ -86,27 +85,6 @@
     "explorer": "View this record on Sui Explorer ↗",
     "immutable": "This record cannot be edited or deleted.",
     "claim": "URGENT — leaked Ministry of Health memo: lemon water with baking soda on an empty stomach clears cancer cells. Hospitals won't tell you! Forward now!!!",
-    "signalsFalse": [
-      "No source named",
-      "No date given",
-      "Urges immediate forwarding",
-      "Claims authorities hide it"
-    ],
-    "signalsTrue": [
-      "Named ministry source",
-      "Dated 14 Aug 2026",
-      "Figures match budget doc"
-    ],
-    "reasonFalse": [
-      "Alkaline-remedy cancer claims have been reviewed and rejected; no ministry circular exists.",
-      "Mechanism is not absurd, but the leap to clearing cancer cells is unsupported.",
-      "Matches a chain message in circulation since 2019, including the suppression framing."
-    ],
-    "reasonTrue": [
-      "Allocation figure matches the published 2026 budget line item.",
-      "Press release confirms both the amount and the effective date.",
-      "Wording is close to the official statement; no distortion found."
-    ],
     "copied": "Copied!",
     "signIn": "Sign in",
     "signOut": "Sign out",

@@ -53,10 +53,10 @@ type ApiVerdict = {
   verdict?: string;
   description?: string;
   flags?: string[];
-  models?: { name: string; score: number; reasoning: string; requestId: string }[];
+  models?: { name: string; score: number; reasoning: string[]; requestId: string }[];
   modelCount?: number;
   positions?: { stance: string; models: string[]; reasoning: string }[];
-  respondedModel?: { name: string; score: number; reasoning: string; requestId: string };
+  respondedModel?: { name: string; score: number; reasoning: string[]; requestId: string };
 };
 
 /**
@@ -137,7 +137,7 @@ export function localizeVerdict(verdict: Verdict, locale: Locale, t: T): Verdict
     title: t(TITLE_KEY[verdict.state]),
     description: t(DESC_KEY[verdict.state]),
     signals: [],
-    models: verdict.models.map((m) => ({ ...m, reasoning: "" })),
+    models: verdict.models.map((m) => ({ ...m, reasoning: [] })),
     positions: undefined,
   };
 }

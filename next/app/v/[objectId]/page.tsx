@@ -15,8 +15,11 @@ import { headingFont, messagesByLocale, resolveLocale, TIME_ZONE } from "@/lib/l
 type ModelResult = {
   model: string;
   requestId: string;
-  score: number | null;
-  reasoning: string;
+  /** Already formatted (e.g. "88%") — the trace stores fixtures.ts's
+   *  verdictFromApi() output, which pre-formats scores as display strings,
+   *  not raw numbers. Null only when the trace has no entry for this model. */
+  score: string | null;
+  reasoning: string[];
 };
 
 type Verdict = {
@@ -78,12 +81,15 @@ async function getVerdict(objectId: string): Promise<Verdict | null> {
 
   const trace = await fetchTrace(onChain.traceBlob);
 
-  // Shape of a /api/verdict result, as archived by /api/attest.
+  // Shape of fixtures.ts's verdictFromApi() output, as archived by
+  // /api/attest — /api/attest receives the frontend's already-formatted
+  // Verdict (flow.tsx sends `result: verdict`), not the raw /api/verdict
+  // response, so `score` here is already a display string like "88%".
   const traceModels = Array.isArray(trace?.models)
-    ? (trace.models as { name?: string; score?: number; reasoning?: string; requestId?: string }[])
+    ? (trace.models as { name?: string; score?: string; reasoning?: string[]; requestId?: string }[])
     : [];
   const reasoningByModel = new Map(
-    traceModels.map((m) => [m.name, { reasoning: m.reasoning ?? "", score: m.score ?? null }]),
+    traceModels.map((m) => [m.name, { reasoning: m.reasoning ?? [], score: m.score ?? null }]),
   );
 
   return {
@@ -101,7 +107,7 @@ async function getVerdict(objectId: string): Promise<Verdict | null> {
       model,
       requestId: onChain.requestIds[i] ?? "",
       score: reasoningByModel.get(model)?.score ?? null,
-      reasoning: reasoningByModel.get(model)?.reasoning ?? "",
+      reasoning: reasoningByModel.get(model)?.reasoning ?? [],
     })),
     challengeCount: onChain.challengeCount,
     createdAtMs: onChain.createdAtMs,
@@ -218,7 +224,7 @@ export default async function VerifyPage({
                     key={m.model}
                     model={{
                       name: m.model,
-                      score: m.score === null ? "—" : `${m.score}%`,
+                      score: m.score ?? "—",
                       reasoning: m.reasoning,
                       requestId: m.requestId,
                     }}
