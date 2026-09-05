@@ -59,12 +59,6 @@ type ApiVerdict = {
   respondedModel?: { name: string; score: number; reasoning: string[]; requestId: string };
 };
 
-/**
- * Fold a real `/api/verdict` response into the same shape the fixtures use,
- * so the result panel has exactly one rendering path. The API is the source
- * of truth for content; `t` only supplies the stance labels, which are UI
- * chrome rather than model output.
- */
 /** Per-state copy that exists in every locale — the fallback when the LLM's own wording cannot be used. */
 const TITLE_KEY: Record<VerdictState, string> = {
   true: "verdictTrue",
@@ -82,6 +76,12 @@ const DESC_KEY: Record<VerdictState, string> = {
   insufficient: "descInsufficient",
 };
 
+/**
+ * Fold a real `/api/verdict` response into the same shape the fixtures use,
+ * so the result panel has exactly one rendering path. The API is the source
+ * of truth for content; `t` only supplies the stance labels, which are UI
+ * chrome rather than model output.
+ */
 export function verdictFromApi(api: ApiVerdict, t: T, locale: Locale): Verdict {
   const state = resolveVerdictState(api.state);
   const tone: Tone = state === "true" ? "t" : "f";
