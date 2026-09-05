@@ -1,4 +1,5 @@
 import type { ModelResult, Tone } from "@/app/components/ui";
+import type { Locale } from "@/lib/locale";
 
 export const VERDICT_STATES = [
   "false",
@@ -12,6 +13,13 @@ export type VerdictState = (typeof VERDICT_STATES)[number];
 
 export type Verdict = {
   state: VerdictState;
+  /**
+   * The locale `title`, `description`, `signals` and the per-model reasoning
+   * were generated in. The API writes them via the LLM in the language that
+   * was active when the check ran, so switching language afterwards cannot
+   * retranslate them — see localizeVerdict().
+   */
+  locale: Locale;
   score: number | null;
   tone: Tone;
   title: string;
@@ -57,31 +65,37 @@ type ApiVerdict = {
  * of truth for content; `t` only supplies the stance labels, which are UI
  * chrome rather than model output.
  */
-export function verdictFromApi(api: ApiVerdict, t: T): Verdict {
+/** Per-state copy that exists in every locale — the fallback when the LLM's own wording cannot be used. */
+const TITLE_KEY: Record<VerdictState, string> = {
+  true: "verdictTrue",
+  false: "verdictFalse",
+  disputed: "verdictDisputed",
+  unverifiable: "verdictUnverifiable",
+  insufficient: "verdictInsufficient",
+};
+
+const DESC_KEY: Record<VerdictState, string> = {
+  true: "descTrue",
+  false: "descFalse",
+  disputed: "descDisputed",
+  unverifiable: "descUnverifiable",
+  insufficient: "descInsufficient",
+};
+
+export function verdictFromApi(api: ApiVerdict, t: T, locale: Locale): Verdict {
   const state = resolveVerdictState(api.state);
   const tone: Tone = state === "true" ? "t" : "f";
-  const title =
-    api.verdict ??
-    t(
-      state === "true"
-        ? "verdictTrue"
-        : state === "disputed"
-          ? "verdictDisputed"
-          : state === "unverifiable"
-            ? "verdictUnverifiable"
-            : state === "insufficient"
-              ? "verdictInsufficient"
-              : "verdictFalse",
-    );
+  const title = api.verdict ?? t(TITLE_KEY[state]);
 
   const responded = api.respondedModel;
 
   return {
     state,
+    locale,
     score: api.score ?? null,
     tone,
     title,
-    description: api.description ?? "",
+    description: api.description ?? t(DESC_KEY[state]),
     signals: api.flags ?? [],
     models: (api.models ?? (responded ? [responded] : [])).map((m) => ({
       name: m.name,
@@ -99,5 +113,31 @@ export function verdictFromApi(api: ApiVerdict, t: T): Verdict {
         reasoning: p.reasoning,
       };
     }),
+  };
+}
+
+/**
+ * Reconcile a verdict with the locale the UI is *currently* in.
+ *
+ * The header copy comes back from /api/verdict as LLM prose written in the
+ * check-time locale. Switching language on a result screen re-renders every
+ * t() string but cannot retranslate that prose, which left the card mixing two
+ * languages. When the two disagree we drop the LLM wording for the per-state
+ * strings, which are translated for all three locales.
+ *
+ * `signals` and the per-model reasoning are LLM prose too and have no
+ * translated equivalent, so they are dropped rather than shown in the wrong
+ * language.
+ */
+export function localizeVerdict(verdict: Verdict, locale: Locale, t: T): Verdict {
+  if (verdict.locale === locale) return verdict;
+  return {
+    ...verdict,
+    locale,
+    title: t(TITLE_KEY[verdict.state]),
+    description: t(DESC_KEY[verdict.state]),
+    signals: [],
+    models: verdict.models.map((m) => ({ ...m, reasoning: "" })),
+    positions: undefined,
   };
 }
