@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -12,7 +12,6 @@ import {
   ModelCard,
   Panel,
   Serif,
-  SignalsAndModels,
   Spinner,
   Warn,
   btn,
@@ -40,12 +39,67 @@ const IMAGE_VERDICT_TONE: Record<string, "t" | "f"> = {
 
 export function ResultPanel() {
   const t = useTranslations("App");
-  const { locale, verdict, imageCheck, objectId, reset, check, href } = useFlow();
+  const { locale, text, verdict, imageCheck, objectId, reset, check, href } = useFlow();
   const router = useRouter();
+  const [refutation, setRefutation] = useState<{ summaryFlags: string[]; politeRefutation: string } | null>(null);
+  const [refutationLoading, setRefutationLoading] = useState(false);
+  const [copiedRefutation, setCopiedRefutation] = useState(false);
+
+  const handleCopyRefutation = async () => {
+    if (!refutation) return;
+    try {
+      await navigator.clipboard.writeText(refutation.politeRefutation);
+      setCopiedRefutation(true);
+      setTimeout(() => setCopiedRefutation(false), 2000);
+    } catch {
+      // clipboard unavailable — the text is still selectable/copyable by hand
+    }
+  };
 
   useEffect(() => {
     if (!verdict) router.replace(href("/"));
   }, [verdict, href, router]);
+
+  // Fires only for a definitive true/false verdict — a plain-language
+  // summary and a polite rebuttal message only make sense once there's an
+  // actual verdict to summarize. Loaded after the verdict itself so the
+  // main result never waits on this second, purely supplementary call.
+  //
+  // Depends on state/score, not the whole `verdict` object: localizeVerdict()
+  // (lib/fixtures.ts) returns a new Verdict object every time the UI
+  // language changes, even for the same check. Depending on `verdict` itself
+  // would re-fire this on every language toggle instead of once per real
+  // check — an unnecessary AI call each time.
+  useEffect(() => {
+    if (!verdict || verdict.score === null) return;
+    setRefutationLoading(true);
+    fetch("/api/sum-and-refute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        original_message: text,
+        final_verdict: JSON.stringify({
+          state: verdict.state,
+          score: verdict.score,
+          flags: verdict.signals,
+          models: verdict.models,
+        }),
+        language: locale,
+      }),
+    })
+      .then((r) => r.json())
+      .then((r) => {
+        if (r.success) {
+          setRefutation({
+            summaryFlags: r.data.summary_flags ?? [],
+            politeRefutation: r.data.polite_refutation ?? "",
+          });
+        }
+      })
+      .catch((cause) => console.error("Summary/refutation failed:", cause))
+      .finally(() => setRefutationLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verdict?.state, verdict?.score, text]);
 
   if (!verdict) return <Spinner locale={locale} title={t("loading")} sub="" />;
 
@@ -85,7 +139,7 @@ export function ResultPanel() {
             </div>
           </div>
           <div className="rounded-[10px] bg-[#f7f5ef]/10 px-[13px] py-[10px] text-[12.5px] text-[#f7f5ef]">
-            {t("confidence")}
+            {t("confidence", { count: verdict.modelCount })}
           </div>
         </>
       ) : (
@@ -101,7 +155,7 @@ export function ResultPanel() {
 
       {verdict.state === "disputed" && (
         <div className="rounded-[10px] bg-[#f7f5ef]/10 px-[13px] py-[10px] text-[12.5px] text-[#f7f5ef]">
-          {t("noConsensus")}
+          {t("noConsensus", { count: verdict.modelCount })}
         </div>
       )}
 
@@ -114,12 +168,54 @@ export function ResultPanel() {
   return (
     <Panel head={head}>
       {scored && (
-        <SignalsAndModels
-          labels={{ signals: t("mKeySignals"), models: t("mModels") }}
-          signals={verdict.signals}
-          tone={verdict.tone}
-          models={verdict.models}
-        />
+        <div className="grid gap-[10px]">
+          <Micro>{t("mSummary")}</Micro>
+          {refutationLoading ? (
+            <div className="grid gap-2">
+              <div className="h-3 w-full animate-pulse rounded-full bg-[#ece9e0]" />
+              <div className="h-3 w-5/6 animate-pulse rounded-full bg-[#ece9e0]" />
+              <div className="h-3 w-2/3 animate-pulse rounded-full bg-[#ece9e0]" />
+            </div>
+          ) : refutation ? (
+            <>
+              <ul className="grid list-disc gap-1 pl-[18px] text-[13px] leading-[1.55] text-[#6b7280]">
+                {refutation.summaryFlags.map((f, i) => (
+                  <li key={i}>{f}</li>
+                ))}
+              </ul>
+              <div className="grid gap-[8px] pt-[6px]">
+                <Micro>{t("mPoliteRefutation")}</Micro>
+                {/* Deliberately not styled like the AI verdict above — this is
+                    a message the user can send, not a judgment, so it reads
+                    as a quoted note (accent border, no tone color) instead
+                    of a green/red result card. */}
+                <div className="grid gap-[8px] rounded-xl border border-dotted border-[#c98a3a]/50 bg-white p-[12px]">
+                  <p className="text-[13.5px] italic leading-[1.55] text-[#5c4626]">
+                    “{refutation.politeRefutation}”
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCopyRefutation}
+                    className="justify-self-end text-[12px] font-semibold text-[#8a5a1f] hover:underline"
+                  >
+                    {copiedRefutation ? t("copied") : t("copyRefutation")}
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+
+      {scored && (
+        <div className="grid gap-[10px]">
+          <Micro>{t("mModels")}</Micro>
+          <div className="grid gap-[9px]">
+            {verdict.models.map((m) => (
+              <ModelCard key={m.name} model={m} />
+            ))}
+          </div>
+        </div>
       )}
 
       {imageCheck && imageCheck.claim_verdict && (

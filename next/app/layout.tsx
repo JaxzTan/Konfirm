@@ -8,6 +8,7 @@ import {
 } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { siteOrigin } from "@/lib/site-url";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -37,6 +38,10 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  // Required for any page's relative openGraph.images URL (e.g.
+  // /card/[objectId] and /v/[objectId]) to resolve to something a link
+  // unfurler (WhatsApp, Telegram, iMessage) can actually fetch.
+  metadataBase: new URL(siteOrigin()),
   title: "Konfirm — Check It Before Send It",
   description:
     "Paste a message, link, or screenshot. Konfirm cross-checks it with 3 AI models and records the verdict on-chain so anyone can verify it independently.",

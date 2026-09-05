@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import {claimSystemPrompt, AI_MODELS} from "@/lib/global_variables";
 import { aggregate } from "@/lib/aggregate";
 import { NextRequest, NextResponse } from "next/server";
+import { resolveLocale } from "@/lib/locale";
 
 // Response time limit before timeout
 export const maxDuration = 120;
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest)
 {
 	const body = await request.json();
 	const claim = body.claim;
-	const language = body.language ?? "en";
+	const language = resolveLocale(body.language);
 
 	// Verify incoming request is in the correct format
 	if (!claim)

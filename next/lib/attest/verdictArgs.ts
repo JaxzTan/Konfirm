@@ -3,12 +3,13 @@
 // once — the Move side documents state/score/confidence semantics in
 // move/sources/registry.move's field comments, matched here.
 //
-// /api/verdict currently only ever emits "true" | "false" | "unverifiable"
-// (see stateFromVerdict() in next/app/api/verdict/route.ts) — the
-// "disputed"/"insufficient" branches below match states the Move contract
-// and the UI both already support, but nothing in the current backend
-// produces them yet. Kept for when aggregate.ts grows a real disagreement
-// signal instead of always blending to one score.
+// /api/verdict currently only ever emits one of the 5 scored buckets
+// ("true" | "likely_true" | "partially_true" | "likely_false" | "false") or
+// "unverifiable" (see stateFromVerdict() in next/app/api/verdict/route.ts) —
+// the "disputed"/"insufficient" branches below match states the Move
+// contract and the UI both already support, but nothing in the current
+// backend produces them yet. Kept for when aggregate.ts grows a real
+// disagreement signal instead of always blending to one score.
 
 // Matches STATE_VERDICT/STATE_DISPUTED/STATE_UNVERIFIABLE/STATE_INSUFFICIENT
 // in move/sources/registry.move. Not imported from anywhere — Move has no
@@ -37,6 +38,9 @@ export function normalizeVerdictArgs(result: any): VerdictArgs {
 
   switch (result.state) {
     case "true":
+    case "likely_true":
+    case "partially_true":
+    case "likely_false":
     case "false": {
       const scores: number[] = result.models.map((m: any) => m.score);
       return {

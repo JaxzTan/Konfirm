@@ -1,6 +1,7 @@
 import OpenAI from "openai";
-import { SUMMARY_AND_REFUTATION_SYSTEM_PROMPT, AI_MODELS } from "@/lib/global_variables";
+import { summaryRefutationSystemPrompt, AI_MODELS } from "@/lib/global_variables";
 import { NextRequest, NextResponse } from "next/server";
+import { resolveLocale } from "@/lib/locale";
 
 // Response time limit before timeout
 export const maxDuration = 120;
@@ -10,6 +11,7 @@ export async function POST(request: NextRequest)
 	const body = await request.json();
 	const originalMessage = body["original_message"];
 	const finalVerdict = body["final_verdict"];
+	const language = resolveLocale(body["language"]);
 
 	// Verify incoming request is in the correct format
 	if (!finalVerdict)
@@ -40,9 +42,9 @@ export async function POST(request: NextRequest)
 		// Priority to Gonka Router Models, which are better at language tasks
 		// Each batch contains one Gemini Model as backup, for consistent response
 		const priorityBatch = [
-			sendPrompt(AI_MODELS[0], combined),
-			sendPrompt(AI_MODELS[1], combined),
-			sendPrompt(AI_MODELS[4], combined),
+			sendPrompt(AI_MODELS[0], combined, language),
+			sendPrompt(AI_MODELS[1], combined, language),
+			sendPrompt(AI_MODELS[4], combined, language),
 		];
 
 		// Results will contain an array of promise responses
@@ -66,11 +68,11 @@ export async function POST(request: NextRequest)
 
 		// If priority batches all time out, use Backup Batch instead
 		const backupmBatch = [
-			sendPrompt(AI_MODELS[2], combined),
-			sendPrompt(AI_MODELS[3], combined),
+			sendPrompt(AI_MODELS[2], combined, language),
+			sendPrompt(AI_MODELS[3], combined, language),
 		];
 
-		const results2 = await Promise.allSettled(priorityBatch);
+		const results2 = await Promise.allSettled(backupmBatch);
 
 		summaryAndRefutation = cleanAndReturn(results2);
 
@@ -104,7 +106,7 @@ export async function POST(request: NextRequest)
 
 /*------[Send User Prompt to a Model for processing]------*/
 
-async function sendPrompt(chosenModel: string, userInput: string)
+async function sendPrompt(chosenModel: string, userInput: string, language: string)
 {
 	const abortController = new AbortController();
 
@@ -166,7 +168,7 @@ async function sendPrompt(chosenModel: string, userInput: string)
             model: chosenModel,
             max_tokens: maxTokens,
             messages: [
-                { role: 'system', content: SUMMARY_AND_REFUTATION_SYSTEM_PROMPT },
+                { role: 'system', content: summaryRefutationSystemPrompt(language) },
                 { role: 'user', content: incomingPrompt }
             ],
         },

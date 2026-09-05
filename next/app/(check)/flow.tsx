@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { NextIntlClientProvider, useTranslations } from "next-intl";
 import { Transaction } from "@mysten/sui/transactions";
@@ -9,9 +9,15 @@ import { useKonfirmIdentity } from "@/lib/signer";
 import { useSignAndExecuteTransaction } from "@/lib/sui/useSignAndExecuteTransaction";
 import { computeClaimHash } from "@/lib/attest/claimHash";
 import { messagesByLocale, TIME_ZONE, type Locale } from "@/lib/locale";
-import { verdictFromApi, type Verdict } from "@/lib/fixtures";
+import { localizeVerdict, verdictFromApi, type Verdict } from "@/lib/fixtures";
 
 export type Mode = "text" | "link" | "photo";
+
+/** Base64-encodes to ~1.33x its original size before hitting the request
+ *  body, on top of what a large image already costs OCR and the Gemini
+ *  image-check call — 8MB keeps the upload snappy without being so tight it
+ *  rejects an ordinary phone screenshot. */
+const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
 /** VirusTotal's `scan-link` result — a security check, not an AI verdict. */
 export type LinkCheck = {
@@ -134,11 +140,32 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
 
   const setPhoto = (file: File | undefined) => {
     if (!file) return;
+
+    // These both used to fail silently — an invalid or unreadable file just
+    // left photoDataUrl null with no explanation, so the Check button stayed
+    // disabled and nothing ever told the user why. Route through the same
+    // error screen check()/attest() already use instead of inventing a
+    // second, inline error pattern just for this.
+    if (!file.type.startsWith("image/")) {
+      setError("That file doesn't look like an image. Please choose a photo.");
+      go("/failed");
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      setError("That photo is too large (max 8MB). Try a smaller image or a screenshot instead.");
+      go("/failed");
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
       setPhotoPreview(dataUrl);
       setPhotoDataUrl(dataUrl);
+    };
+    reader.onerror = () => {
+      setError("Couldn't read that photo. Try again or pick a different file.");
+      go("/failed");
     };
     reader.readAsDataURL(file);
   };
@@ -184,13 +211,36 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
       let claimText = text;
 
       if (mode === "photo") {
-        if (!photoDataUrl) return;
+        // Was a silent `return` here — after go("/checking") already fired,
+        // that left the user stranded on the spinner forever with no error
+        // and no way out. Throwing lets the existing catch below handle it
+        // the same as every other failure in this flow.
+        if (!photoDataUrl) {
+          throw new Error("No photo selected.");
+        }
+
         const ocr = await fetch("/api/ocr", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ image: photoDataUrl }),
         });
-        claimText = (await ocr.json()).text;
+        const ocrBody = await ocr.json().catch(() => ({}));
+        if (!ocr.ok) {
+          throw new Error(
+            typeof ocrBody.error === "string" ? ocrBody.error : "Couldn't read this photo. Try a clearer image.",
+          );
+        }
+
+        claimText = typeof ocrBody.text === "string" ? ocrBody.text.trim() : "";
+        // A photo with no readable text (a landscape, a blank screenshot)
+        // used to silently fall through to /api/verdict with an empty
+        // claim, which failed there with a generic "Missing 'text'" error
+        // that never explained what actually went wrong.
+        if (!claimText) {
+          throw new Error(
+            "We couldn't find any readable text in this photo. Try Text mode instead, or a clearer screenshot.",
+          );
+        }
         setText(claimText); // visible if the user switches back to Text mode
       }
 
@@ -216,7 +266,7 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
         }),
         imageSideCheck,
       ]);
-      setVerdict(verdictFromApi(await response.json(), t));
+      setVerdict(verdictFromApi(await response.json(), t, locale));
 
       // Signing in is not consent to publish, so a signed-in user still lands
       // on the confirm screen — they only skip the gate.
@@ -238,7 +288,7 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
       const attestResponse = await fetch("/api/attest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lang: locale, result: verdict }),
+        body: JSON.stringify({ lang: locale, result: verdict, claim: text }),
       });
       // Parse defensively: a 500 can come back as an HTML error page, and a
       // raw SyntaxError here would bury the status code that explains it.
@@ -288,6 +338,14 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
     }
   };
 
+  // The verdict's prose is frozen in the locale it was generated in; the rest
+  // of the screen follows the language switcher. Reconciling here means every
+  // consumer reads one already-consistent verdict.
+  const shownVerdict = useMemo(
+    () => (verdict ? localizeVerdict(verdict, locale, t) : null),
+    [verdict, locale, t],
+  );
+
   const value: Flow = {
     locale,
     mode,
@@ -297,7 +355,7 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
     photoDataUrl,
     photoPreview,
     setPhoto,
-    verdict,
+    verdict: shownVerdict,
     linkCheck,
     imageCheck,
     objectId,

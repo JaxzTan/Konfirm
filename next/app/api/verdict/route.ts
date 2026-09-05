@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getClaimVerdict } from "@/app/api/verify-claim/route";
 import { messagesByLocale, resolveLocale } from "@/lib/locale";
 
-// Short, purely mechanical fallback strings the backend itself generates
-// (not model output) — kept here rather than in messages/*.json since
-// they're a technical placeholder, not user-facing product copy.
+// Purely mechanical fallback signal (not model output) — kept here rather
+// than in messages/*.json since it's a technical placeholder, not
+// user-facing product copy.
 const NO_SIGNALS: Record<string, string> = {
   en: "No specific signals returned.",
   bm: "Tiada isyarat khusus dikembalikan.",
@@ -12,13 +12,15 @@ const NO_SIGNALS: Record<string, string> = {
 };
 
 // Human-readable names for the UI — Gilbert's AI_MODELS entries are raw
-// provider/model IDs (e.g. "moonshotai/Kimi-K2.6"), not display names.
+// provider/model IDs (e.g. "moonshotai/Kimi-K2.6"). Kept as the full
+// versioned model name (not just the brand) so it's clear which model
+// variant actually produced each result.
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
-  "moonshotai/Kimi-K2.6": "Kimi",
-  "deepseek-ai/DeepSeek-V4-Flash-0731": "DeepSeek",
-  "MiniMaxAI/MiniMax-M2.7": "MiniMax",
-  "gemini-3.1-flash-lite": "Gemini 3.1",
-  "gemini-3.5-flash-lite": "Gemini 3.5",
+  "moonshotai/Kimi-K2.6": "Kimi-K2.6",
+  "deepseek-ai/DeepSeek-V4-Flash-0731": "DeepSeek-V4-Flash-0731",
+  "MiniMaxAI/MiniMax-M2.7": "MiniMax-M2.7",
+  "gemini-3.1-flash-lite": "Gemini-3.1-Flash-Lite",
+  "gemini-3.5-flash-lite": "Gemini-3.5-Flash-Lite",
 };
 
 // Mirrors lib/aggregate.ts's own verdictTrustScores table — used here only to
@@ -34,17 +36,33 @@ const VERDICT_SCORES: Record<string, number> = {
   CANNOT_BE_VERIFIED: 0,
 };
 
-function stateFromVerdict(claimVerdict: string | null): "true" | "false" | "unverifiable" {
-  if (claimVerdict === "CANNOT_BE_VERIFIED" || claimVerdict === null) return "unverifiable";
-  const score = VERDICT_SCORES[claimVerdict] ?? 0;
-  return score >= 50 ? "true" : "false";
+// The frontend shows all 5 of aggregate.ts's own buckets, not a collapsed
+// true/false — passing the label straight through instead of re-deriving
+// true/false from a separate score threshold that could drift out of sync
+// with aggregate.ts's own boundaries.
+type VerdictState = "true" | "likely_true" | "partially_true" | "likely_false" | "false" | "unverifiable";
+
+const STATE_FROM_CLAIM_VERDICT: Record<string, VerdictState> = {
+  TRUE: "true",
+  LIKELY_TRUE: "likely_true",
+  PARTIALLY_TRUE: "partially_true",
+  LIKELY_FALSE: "likely_false",
+  FALSE: "false",
+  CANNOT_BE_VERIFIED: "unverifiable",
+};
+
+const TRUE_LEANING = new Set<VerdictState>(["true", "likely_true"]);
+
+function stateFromVerdict(claimVerdict: string | null): VerdictState {
+  if (claimVerdict === null) return "unverifiable";
+  return STATE_FROM_CLAIM_VERDICT[claimVerdict] ?? "unverifiable";
 }
 
-function describe(state: string, greenFlags: string[], redFlags: string[], language: ReturnType<typeof resolveLocale>): string {
+function describe(state: VerdictState, greenFlags: string[], redFlags: string[], language: ReturnType<typeof resolveLocale>): string {
   if (state === "unverifiable") {
     return messagesByLocale[language].App.descUnverifiable;
   }
-  const flags = state === "true" ? greenFlags : redFlags;
+  const flags = TRUE_LEANING.has(state) ? greenFlags : redFlags;
   return flags.slice(0, 2).join(". ") || "";
 }
 
@@ -65,20 +83,21 @@ export async function POST(request: NextRequest) {
     const allGreen = [...new Set(finalVerdict.individual_responses.flatMap((r) => r.green_flags))];
     const allRed = [...new Set(finalVerdict.individual_responses.flatMap((r) => r.red_flags))];
 
-    const models = finalVerdict.individual_responses.map((r) => ({
-      name: MODEL_DISPLAY_NAMES[r.model] ?? r.model,
-      score: VERDICT_SCORES[r.verdict] ?? 0,
-      reasoning:
-        (r.verdict === "TRUE" || r.verdict === "LIKELY_TRUE" ? r.green_flags : r.red_flags).join(". ") ||
-        NO_SIGNALS[language],
-      requestId: requestIds[r.model] || "unavailable",
-    }));
+    const models = finalVerdict.individual_responses.map((r) => {
+      const points = r.verdict === "TRUE" || r.verdict === "LIKELY_TRUE" ? r.green_flags : r.red_flags;
+      return {
+        name: MODEL_DISPLAY_NAMES[r.model] ?? r.model,
+        score: VERDICT_SCORES[r.verdict] ?? 0,
+        reasoning: points.length > 0 ? points : [NO_SIGNALS[language]],
+        requestId: requestIds[r.model] || "unavailable",
+      };
+    });
 
     return NextResponse.json({
       state,
       score: finalVerdict.trust_score,
       description: describe(state, allGreen, allRed, language),
-      flags: state === "true" ? allGreen : state === "false" ? allRed : [],
+      flags: state === "unverifiable" ? [] : TRUE_LEANING.has(state) ? allGreen : allRed,
       models,
       modelCount: models.length,
     });

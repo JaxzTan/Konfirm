@@ -116,7 +116,8 @@ export function Spinner({
 export type ModelResult = {
   name: string;
   score: string;
-  reasoning: string;
+  /** One bullet per reasoning point — rendered as a list, not one paragraph. */
+  reasoning: string[];
   requestId: string;
 };
 
@@ -129,7 +130,11 @@ export function ModelCard({ model }: { model: ModelResult }) {
           {model.score}
         </span>
       </div>
-      <p className="text-[13px] leading-[1.55] text-[#6b7280]">{model.reasoning}</p>
+      <ul className="grid list-disc gap-1 pl-[18px] text-[13px] leading-[1.55] text-[#6b7280]">
+        {model.reasoning.map((point, i) => (
+          <li key={i}>{point}</li>
+        ))}
+      </ul>
       <p className="border-t border-dashed border-[#d1d5db] pt-[7px] font-mono text-[10.5px] text-[#6b7280]">
         {model.requestId}
       </p>

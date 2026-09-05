@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { lang, result } = body as { lang: Locale; result: any };
+  const { lang, result, claim } = body as { lang: Locale; result: any; claim?: string };
 
   if (!(lang in LANG_CODES) || !result?.state) {
     return NextResponse.json({ error: "Missing or invalid lang/result." }, { status: 400 });
@@ -36,7 +36,19 @@ export async function POST(request: NextRequest) {
 
   // The full verdict, PII-redacted (TR-10) — this is the "complete reasoning
   // trace" FR-9 wants archived, not just the on-chain summary fields.
-  const trace = redactDeep({ ...result, attestedAt: new Date().toISOString() });
+  //
+  // `claim` is the message the user actually asked about. It goes in the blob
+  // so the record says what was checked, not just how it scored — a verdict
+  // identified only by a hash is unreadable to the person who shared it and to
+  // anyone they send it to. It is public and permanent: Walrus blobs are
+  // world-readable and the blobId is written on chain. The sign-in copy
+  // (App.gateBody) tells the user this before they consent. redactDeep still
+  // strips PII from it, and the chain still stores only the hash.
+  const trace = redactDeep({
+    ...result,
+    claim: typeof claim === "string" ? claim.slice(0, 2000) : "",
+    attestedAt: new Date().toISOString(),
+  });
 
   const publisherUrl = process.env.WALRUS_PUBLISHER;
   if (!publisherUrl) {

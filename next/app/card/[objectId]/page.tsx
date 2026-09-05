@@ -1,45 +1,51 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createTranslator } from "next-intl";
 
 import ShareButtons from "./ShareButtons";
 import { Warn } from "@/app/components/ui";
 import { headingFont, messagesByLocale, resolveLocale, TIME_ZONE } from "@/lib/locale";
-import { fetchOnChainVerdict, fetchTrace, STATE_VERDICT } from "@/lib/sui/verdict";
+import { getCard } from "@/lib/card";
+import { siteHost } from "@/lib/site-url";
 
-type Card = {
-  objectId: string;
-  /** "unclear" covers disputed/unverifiable/insufficient alike — this card
-   *  has no room for that nuance, but it must not claim "false" when the
-   *  models never actually reached a verdict. "view full result" is what
-   *  /v/[objectId]'s real state breakdown is for. */
-  state: "true" | "false" | "unclear";
-  modelCount: number;
-  /** Real per-verdict description from the Walrus trace, or null when the
-   *  trace is unreadable — falls back to the generic string-table copy. */
-  description: string | null;
-};
+/**
+ * Open Graph tags so pasting this link into WhatsApp/Telegram/iMessage shows
+ * the actual verdict card, not a generic site preview — the image comes from
+ * /api/card/[objectId], the same PNG generator ShareButtons' own file-share
+ * path uses, so a pasted link and a shared file look identical.
+ */
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ objectId: string }>;
+  searchParams: Promise<{ lang?: string }>;
+}): Promise<Metadata> {
+  const { objectId } = await params;
+  const locale = resolveLocale((await searchParams).lang);
+  const card = await getCard(objectId);
+  if (!card) return {};
 
-/** Reads the real on-chain Verdict — same source /v/[objectId] uses. */
-async function getCard(objectId: string): Promise<Card | null> {
-  const onChain = await fetchOnChainVerdict(objectId);
-  if (!onChain) return null;
-
-  const trace = await fetchTrace(onChain.traceBlob);
-  const traceState = trace?.state;
-  const state: Card["state"] =
-    traceState === "true" || traceState === "false"
-      ? traceState
-      : onChain.state === STATE_VERDICT && onChain.score !== null
-        ? onChain.score >= 50
-          ? "true"
-          : "false"
-        : "unclear";
+  const messages = messagesByLocale[locale].App;
+  const headline =
+    card.state === "true" ? messages.verdictTrue : card.state === "false" ? messages.verdictFalse : messages.verdictUnverifiable;
+  const description = card.description ?? messages.cardBody;
+  const imageUrl = `/api/card/${objectId}?lang=${locale}`;
 
   return {
-    objectId: onChain.objectId,
-    state,
-    modelCount: onChain.modelCount,
-    description: typeof trace?.description === "string" ? trace.description : null,
+    title: `Konfirm — ${headline}`,
+    description,
+    openGraph: {
+      title: `Konfirm — ${headline}`,
+      description,
+      images: [{ url: imageUrl, width: 1080, height: 1080 }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `Konfirm — ${headline}`,
+      description,
+      images: [imageUrl],
+    },
   };
 }
 
@@ -73,16 +79,25 @@ export default async function CardPage({
         ? t("verdictFalse")
         : t("verdictUnverifiable");
   const verifyPath = `/v/${card.objectId}?lang=${locale}`;
-  const origin = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://konfirm.my").replace(
-    /^https?:\/\//,
-    "",
-  );
-  const verifyUrl = `${origin}/v/${card.objectId}`;
+  const verifyUrl = `${siteHost()}/v/${card.objectId}`;
 
   return (
     <div className="grid flex-1 content-center gap-[18px] bg-[#f7f5ef] px-5 py-[26px]">
       <div className="grid gap-4 rounded-[26px] bg-gradient-to-b from-[#0f2e23] to-[#0b241b] px-6 py-[26px]">
         <p className="font-serif text-[18px] text-[#f7f5ef]">Konfirm</p>
+
+        {/* The claim first: a shared card that only says "false" without
+            saying false about what is not worth screenshotting. */}
+        {card.claim && (
+          <div className="grid gap-[5px]">
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#9ca3af]">
+              {t("claimChecked")}
+            </p>
+            <p className="line-clamp-3 text-[13.5px] leading-[1.5] text-[#f7f5ef]/85">
+              {card.claim}
+            </p>
+          </div>
+        )}
 
         <h1
           className={`text-[34px] leading-[1.2] ${heading} ${
@@ -110,8 +125,10 @@ export default async function CardPage({
 
       <ShareButtons
         shareUrl={`https://${verifyUrl}`}
+        imageUrl={`/api/card/${card.objectId}?lang=${locale}`}
         shareText={`Konfirm — ${headline}.`}
         shareLabel={t("shareWa")}
+        preparingLabel={t("sharePreparing")}
         copyLabel={t("shareWa")}
         copiedLabel={t("copied")}
       />
