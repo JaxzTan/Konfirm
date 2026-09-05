@@ -70,7 +70,7 @@ export function aggregate(promiseResults: PromiseFulfilledResult<any>[], mode: "
 	if (mode === "claim")
 	{
 		chosenWeight = CLAIM_MODEL_WEIGHTS;
-		minSignificantVerdicts = 2;
+		minSignificantVerdicts = 3;
 	}
 	else if (mode === "image")
 	{

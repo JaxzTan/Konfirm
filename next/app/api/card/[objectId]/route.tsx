@@ -182,7 +182,8 @@ export async function GET(
   const claimLabel = m.claimChecked;
   const warnLabel = m.cardWarn;
 
-  const origin = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://konfirm.my").replace(/^https?:\/\//, "");
+  // `||` not `??`: an unset var reads as "" here, not undefined/null.
+  const origin = (process.env.NEXT_PUBLIC_SITE_URL || "https://konfirm.my").replace(/^https?:\/\//, "");
   const verifyUrl = `${origin}/v/${card.objectId}`;
 
   // One request, subset to exactly what this card draws.

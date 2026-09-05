@@ -78,7 +78,9 @@ export default async function CardPage({
         ? t("verdictFalse")
         : t("verdictUnverifiable");
   const verifyPath = `/v/${card.objectId}?lang=${locale}`;
-  const origin = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://konfirm.my").replace(
+  // `||` not `??`: an unset var reads as "" here, not undefined/null, which
+  // `??` would let through unchanged — silently producing a domain-less URL.
+  const origin = (process.env.NEXT_PUBLIC_SITE_URL || "https://konfirm.my").replace(
     /^https?:\/\//,
     "",
   );

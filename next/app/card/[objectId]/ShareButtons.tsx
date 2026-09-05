@@ -76,7 +76,10 @@ export default function ShareButtons({
       // still refuse files.
       if (navigator.canShare?.({ files: [file] })) {
         try {
-          await navigator.share({ files: [file], text: shareText });
+          // The verify link goes in `text`, not the separate `url` field —
+          // most platforms silently drop `url` when `files` is also present,
+          // while plain text always comes through as the share's caption.
+          await navigator.share({ files: [file], text: `${shareText} ${shareUrl}` });
         } catch {
           // user cancelled — not a failure, and must not fall through to a
           // surprise download.

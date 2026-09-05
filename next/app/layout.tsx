@@ -40,7 +40,10 @@ export const metadata: Metadata = {
   // Required for any page's relative openGraph.images URL (e.g.
   // /card/[objectId] and /v/[objectId]) to resolve to something a link
   // unfurler (WhatsApp, Telegram, iMessage) can actually fetch.
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://konfirm.my"),
+  // `||` not `??`: an unset var reads as "" here, not undefined/null, which
+  // `??` would let straight through into `new URL("")` — an immediate crash
+  // on every page load, not a graceful fallback.
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://konfirm.my"),
   title: "Konfirm — Check It Before Send It",
   description:
     "Paste a message, link, or screenshot. Konfirm cross-checks it with 3 AI models and records the verdict on-chain so anyone can verify it independently.",

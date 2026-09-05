@@ -1,5 +1,5 @@
 import { fetchOnChainVerdict, fetchTrace, STATE_VERDICT } from '@/lib/sui/verdict';
-import { bucketStateFromScore, VERDICT_STATES, type VerdictState } from '@/lib/fixtures';
+import { bucketStateFromScore, SCORED_STATES, VERDICT_STATES, type VerdictState } from '@/lib/fixtures';
 
 /** True-leaning half of the 5 scored states — mirrors fixtures.ts's own set. */
 const TRUE_LEANING = new Set<VerdictState>(['true', 'likely_true']);
@@ -36,14 +36,25 @@ export async function getCard(objectId: string): Promise<Card | null> {
 
   const trace = await fetchTrace(onChain.traceBlob);
   const traceState = trace?.state;
-  const bucketed: VerdictState | null =
+  const resolved: VerdictState | null =
     typeof traceState === 'string' && (VERDICT_STATES as readonly string[]).includes(traceState)
       ? (traceState as VerdictState)
       : onChain.state === STATE_VERDICT && onChain.score !== null
         ? bucketStateFromScore(onChain.score)
         : null;
 
-  const state: Card['state'] = bucketed === null ? 'unclear' : TRUE_LEANING.has(bucketed) ? 'true' : 'false';
+  // "unclear" for anything that isn't one of the 5 *scored* buckets — not
+  // just null. "unverifiable"/"disputed"/"insufficient" are real, non-null
+  // VerdictState values, so a plain `resolved === null` check here would
+  // silently drop them into the true/false binary below (a CANNOT_BE_VERIFIED
+  // claim would read as "false" instead of "unclear" — genuinely wrong, not
+  // just less specific).
+  const state: Card['state'] =
+    resolved !== null && (SCORED_STATES as readonly string[]).includes(resolved)
+      ? TRUE_LEANING.has(resolved)
+        ? 'true'
+        : 'false'
+      : 'unclear';
 
   return {
     objectId: onChain.objectId,
