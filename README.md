@@ -49,13 +49,12 @@ Sui testnet package
 
 ## Authors
 
-<!-- TODO: fill in -->
-
-| Name | Role | Contact / GitHub |
+| Name | Role | GitHub |
 |---|---|---|
-| _TBD_ | Product / backend / Move & on-chain | _TBD_ |
-| _TBD_ | Frontend / design | _TBD_ |
-| _TBD_ | Pitch / content / test corpus | _TBD_ |
+| Jaxz | Check flow UI · i18n · Docker/nginx/ngrok stack · docs | [@JaxzTan](https://github.com/JaxzTan) |
+| Jack | Verdict pipeline · `/card` + `/v` pages · Sui/BCS read layer | [@Jteoh87](https://github.com/Jteoh87) |
+| Jayci | Product docs · pitch pack (`docs/01`–`06`) · BM/ZH copy | [@jaycigan05](https://github.com/jaycigan05) |
+| Gilbert | AI routes (`verify-claim`, `verify-image`, `scan-link`) · test corpus | [@GGWX88](https://github.com/GGWX88) |
 
 Built for **MUBA Hack 2026** (submission 2026-09-05, pitch 2026-09-06 @ APU), targeting the
 **Gonka Router — AI For Society** and **Sui Foundation — AI × SUI** tracks.
@@ -95,8 +94,12 @@ thirty years?
 
 - **Three ways in** — paste text, submit a link, or drop a screenshot (OCR'd on-device via
   Tesseract in `eng` + `msa` + `chi_sim`).
-- **Cross-model verdict** — several models are queried in parallel through GonkaRouter
-  (Kimi, DeepSeek, MiniMax) plus Gemini for vision, then merged by a weighted aggregator.
+- **Cross-model verdict** — five models are queried in parallel: Kimi, DeepSeek and MiniMax
+  through GonkaRouter, plus two Gemini flash-lite models, then merged by a weighted
+  aggregator.
+- **Image authenticity is asked separately** — on the photo path `/api/verify-image` runs
+  *alongside* the text verdict and is shown on its own. "Is this screenshot doctored" and "is
+  this claim true" are different questions, so they are never blended into one score.
 - **Honest about disagreement** — when the models split, or most of them can't verify the
   claim, **no score is shown**. You get both positions instead of false confidence.
 - **Answers in your language** — EN / BM / 中文, UI *and* model output, via `next-intl`.
@@ -117,26 +120,33 @@ thirty years?
 
 ```mermaid
 graph TD
-    U["Browser · Next.js App Router"]
+    U["Browser · app/(check)/flow.tsx"]
 
-    U -->|"POST /api/ocr"| OCR["Tesseract.js OCR<br/>eng · msa · chi_sim"]
-    OCR --> U
-    U -->|"POST /api/verify-claim"| ORC["Multi-model orchestrator<br/>Promise.allSettled · 30s abort"]
-    U -->|"POST /api/scan-link"| VT["VirusTotal v3<br/>URL reputation"]
+    U -->|"photo · POST /api/ocr"| OCR["Tesseract.js OCR<br/>eng · msa · chi_sim"]
+    OCR -->|"extracted text"| U
+    U -->|"link · POST /api/scan-link"| VT["VirusTotal v3<br/>URL reputation → /result/link"]
+    U -->|"text · POST /api/verdict"| VD["/api/verdict<br/>UI-shaped wrapper"]
+    VD --> ORC["getClaimVerdict()<br/>Promise.allSettled over 5 models"]
+    U -.->|"photo only, side check"| VI["POST /api/verify-image<br/>image authenticity, never blended"]
+    VI --> ORC
     ORC -->|"parallel"| GR["GonkaRouter<br/>Kimi · DeepSeek · MiniMax"]
-    ORC -->|"parallel"| GM["Gemini<br/>vision + text"]
-    ORC --> AGG["aggregate()<br/>weighted trust score"]
-    AGG --> U
+    ORC -->|"parallel"| GM["Gemini 3.1 · 3.5 flash-lite<br/>text + vision"]
+    ORC --> AGG["aggregate()<br/>weighted score · min 3 significant"]
+    AGG --> VD
+    VD --> U
+    U -->|"on the result screen"| SR["POST /api/sum-and-refute<br/>summary + rebuttal copy"]
+    SR --> U
 
     U -->|"Google sign-in"| ZK["Enoki zkLogin<br/>wallet-standard"]
-    U -->|"POST /api/attest"| ATT["Attest: PII redact → Walrus"]
+    U -->|"POST /api/attest"| ATT["redactDeep(verdict + claim)<br/>→ Walrus"]
     ATT --> W[("Walrus testnet<br/>reasoning trace blob")]
     U -->|"POST /api/sponsor"| SP["Enoki sponsored tx<br/>server-side private key"]
     U -->|"POST /api/sponsor/execute"| SP
     SP --> SUI[("Sui testnet<br/>konfirm::registry")]
 
-    V["/v/[objectId] · public page"] -->|"gRPC read + BCS decode"| SUI
+    V["/v/[objectId] · public page"] -->|"SuiGrpcClient read + BCS decode"| SUI
     V -->|"read blob"| W
+    V -->|"OG image"| CARD["GET /api/card/[objectId]<br/>next/og · 1080×1080"]
     P3["Wallet holder"] -->|"self-paid challenge tx"| SUI
 ```
 
@@ -153,11 +163,14 @@ inference without taking Konfirm's word for anything.
 2. Discards any model that returned malformed JSON or an empty message — a broken model
    degrades the result, it never fails the request.
 3. Counts **significant verdicts** (anything other than `CANNOT_BE_VERIFIED`). Below the
-   minimum of **2**, it refuses to score and returns `CANNOT_BE_VERIFIED` with
+   minimum — **3** in `claim` mode, **2** in `image` mode, since only two Gemini models carry
+   the vision path — it refuses to score and returns `CANNOT_BE_VERIFIED` with
    `trust_score: null`.
-4. Otherwise computes a **weighted average** over per-model trust weights and per-verdict
-   scores (`TRUE` 100 · `LIKELY_TRUE` 75 · `PARTIALLY_TRUE` 50 · `LIKELY_FALSE` 25 ·
-   `FALSE` 0), then bands the result back into a verdict label.
+4. Otherwise computes a **weighted average** over per-model trust weights
+   (`CLAIM_MODEL_WEIGHTS` or `IMAGE_MODEL_WEIGHTS` in `lib/global_variables.ts`) and
+   per-verdict scores (`TRUE` 100 · `LIKELY_TRUE` 75 · `PARTIALLY_TRUE` 50 ·
+   `LIKELY_FALSE` 25 · `FALSE` 0), then bands the result back into a label at the
+   12.5 / 37.5 / 62.5 / 87.5 cut points.
 5. Always returns **every model's individual verdict and flags** alongside the aggregate, so
    the reasoning stays inspectable.
 
@@ -188,27 +201,41 @@ public struct Verdict has key {
 }
 ```
 
+`create_verdict` also emits `VerdictCreated { verdict_id, claim_hash }`, so an indexer can
+find a verdict from the claim hash without scanning objects. The rest of the module is
+read-only accessors (`score`, `state`, `challenge_count`, `attester`, `challenger`) and the
+state constants.
+
 ---
 
 ## Repository layout
 
 ```
 Konfirm/
-├── next/                      # the web application (everything runs from here)
+├── .env / .env.example        # the single env file — Compose and the Makefile read only this
+├── docker-compose.yml         # nextjs + nginx + ngrok (profile: tunnel)
+├── Makefile                   # the entry point for the containerised stack
+├── nginx/                     # TLS terminator: Dockerfile · nginx.conf · certs/ (generated)
+├── next/                      # the web application (all npm commands run from here)
 │   ├── app/
 │   │   ├── (check)/           # the main flow: input → checking → sign-in → confirm → result
 │   │   │   ├── flow.tsx       # flow state, check(), attest(), reset()
 │   │   │   ├── Shell.tsx      # reads ?lang=, mounts the i18n provider
 │   │   │   ├── InputBody.tsx  # text / link / photo tabs
-│   │   │   └── ResultPanel.tsx
+│   │   │   ├── ResultPanel.tsx      # verdict screen; calls /api/sum-and-refute
+│   │   │   ├── LinkResultPanel.tsx  # /result/link — VirusTotal rating
+│   │   │   └── result/[state]/      # 8 states from lib/fixtures.ts, dynamicParams=false
 │   │   ├── api/
 │   │   │   ├── verify-claim/  # multi-model text fact-check (GonkaRouter + Gemini)
 │   │   │   ├── verify-image/  # multi-model image fact-check (Gemini vision)
 │   │   │   ├── scan-link/     # VirusTotal URL reputation → safety score
 │   │   │   ├── ocr/           # Tesseract.js screenshot → text
-│   │   │   ├── verdict/       # verdict endpoint the UI currently calls (see Known gaps)
+│   │   │   ├── verdict/       # what the UI calls — wraps verify-claim for the frontend shape
+│   │   │   ├── sum-and-refute/# verdict → plain-language summary + rebuttal
 │   │   │   ├── attest/        # PII redaction + Walrus upload → create_verdict args
 │   │   │   ├── sponsor/       # Enoki sponsored transaction (build + execute)
+│   │   │   ├── card/          # Open Graph image for a verdict (next/og)
+│   │   │   ├── testing/       # dev-only scratch route + the test corpus
 │   │   │   └── health/        # pre-demo self-check
 │   │   ├── v/[objectId]/      # public verification page, no login wall
 │   │   ├── card/[objectId]/   # shareable rebuttal card
@@ -218,15 +245,19 @@ Konfirm/
 │   │   ├── global_variables.ts# system prompts + model roster
 │   │   ├── attest/            # redact · claimHash · walrus · lang · verdictArgs
 │   │   ├── sui/               # gRPC client · BCS Verdict decoder · sponsored-tx hook
+│   │   ├── site-url.ts        # public origin: NGROK_DOMAIN > NEXT_PUBLIC_SITE_URL > default
 │   │   └── enoki/sponsor.ts   # server-only Enoki client + Move-call allowlist
 │   ├── messages/              # en.json · bm.json · zh.json
-│   ├── Dockerfile · docker-compose.yml · Makefile
+│   ├── scripts/my-blobs.cjs   # list the Walrus blobs this address has published
+│   ├── Dockerfile
 │   └── package.json
 ├── move/                      # the Sui Move package
 │   ├── sources/registry.move  # konfirm::registry — Verdict + Challenge
 │   ├── tests/registry_tests.move
 │   └── Published.toml         # testnet package ID lives here
-└── docs/                      # PRD · TRD · route map · Enoki setup · redeploy checklist
+├── docs/                      # PRD · TRD · route map · Enoki setup · redeploy checklist,
+│                              # plus the pitch pack (README.md · 01–06) for non-blockchain judges
+└── ARCHITECTURE.md
 ```
 
 ---
@@ -239,6 +270,8 @@ Konfirm/
 | npm | bundled with Node | dependency install |
 | `sui` CLI | testnet-compatible (built with 1.78.1) | building / publishing the Move package |
 | Docker + Docker Compose | any recent | optional containerised run |
+| `mkcert` | any | optional — `make certs` uses it for a locally-trusted TLS cert, else falls back to `openssl` and the browser warns |
+| ngrok account | free tier | optional — `make tunnel`, only if you need a public URL |
 
 Accounts / keys you will need:
 
@@ -254,12 +287,12 @@ Accounts / keys you will need:
 
 ```bash
 git clone <this-repo> Konfirm
-cd Konfirm/next
-npm install
+cd Konfirm
+cp .env.example .env          # fill it in — see Setup below
+cd next && npm install        # only needed to run outside Docker
 ```
 
-> `openai` is imported by the verification routes but is not yet listed in `package.json`.
-> Until that is fixed, also run `npm install openai` — see [Known gaps](#project-status--known-gaps).
+`make up` from the repo root builds and runs everything without a local `npm install`.
 
 For the Move package:
 
@@ -274,11 +307,12 @@ sui move build
 
 ### 1. Environment variables
 
-Copy the template and fill it in. **`next/.env` is the file Next.js reads — not the one at
-the repo root.**
+Copy the template and fill it in. **`.env` at the repo root is the only env file the stack
+reads** — Docker Compose loads it as the container environment and the `Makefile` passes it
+as `--env-file` for the build args. The app runs in Docker, so there is no separate
+`next/.env`.
 
 ```bash
-cd next
 cp .env.example .env
 ```
 
@@ -295,11 +329,28 @@ cp .env.example .env
 | `GONKA_ROUTER_API_KEY` | **server only** | yes | GonkaRouter key (`https://api.gonkarouter.io/v1`) |
 | `GEMINI_API_KEY` | **server only** | yes | Google AI Studio key, used for the image path |
 | `VIRUSTOTAL_API_KEY` | **server only** | yes | VirusTotal v3 key for `/api/scan-link` |
-| `SUI_ATTESTER_SECRET` | **server only** | fallback | `suiprivkey1…` — only used if the zkLogin path is bypassed |
-| `NEXT_PUBLIC_SITE_URL` | browser | no | canonical origin, used for share links |
+| `WALRUS_EPOCHS` | **server only** | no | how many epochs (≈ days) Walrus keeps a trace blob. Unset, out of range or non-integer → **53**, the testnet maximum. See [Walrus endpoints](#4-walrus-endpoints) — this one has already cost us data |
+| `NGROK_DOMAIN` | **server only** | no | reserved ngrok domain. When set it **overrides** `NEXT_PUBLIC_SITE_URL` (`lib/site-url.ts`) and pins the tunnel hostname, so Google OAuth and Enoki allowlists keep matching |
+| `SUI_WALLET` | tooling | no | a zkLogin address for `next/scripts/my-blobs.cjs` to list blobs for. Not a key — a zkLogin address has no local keypair |
 
-> **`NEXT_PUBLIC_*` variables are inlined at build time.** Changing one means restarting
-> `npm run dev` (or rebuilding the image). Server-only keys are read at request time.
+Two more are valid in `.env` but absent from `.env.example`:
+
+| Variable | Required | What it is |
+|---|---|---|
+| `NGROK` | for `make tunnel` | ngrok authtoken. Read by Compose only — it is passed to the `ngrok` container and never reaches the app |
+| `NEXT_PUBLIC_SITE_URL` | no | canonical origin for share links, QR text and OG images. Compose passes it as a build arg defaulting to `https://localhost`, and `lib/site-url.ts` falls back to `https://konfirm.my`. Set it for a real deployment; `NGROK_DOMAIN` overrides it while a tunnel is up |
+
+`.env.example` also declares `PUBLIC_BASE64KEY`, `PEERID` and `CHATGPT_API_KEY`. **None are
+read anywhere in `app/` or `lib/`** — the OpenAI client block in `verify-claim/route.ts` that
+would use the last one is commented out. Leave them blank; see
+[Known gaps](#project-status--known-gaps).
+
+> **`NEXT_PUBLIC_*` variables are inlined at build time.** Changing one means a rebuild
+> (`make re`, or restarting `npm run dev`). Server-only keys are read at request time.
+
+> **Running outside Docker?** `next dev` and `next/scripts/my-blobs.cjs` both read
+> **`next/.env`**, which no longer exists in the repo. Link it once —
+> `ln -s ../.env next/.env` from inside `next/` — or those two see no configuration at all.
 
 ### 2. Google OAuth client
 
@@ -364,8 +415,21 @@ by the challenger's own wallet.
 ### 4. Walrus endpoints
 
 Point `WALRUS_PUBLISHER` at a testnet publisher and `NEXT_PUBLIC_WALRUS_AGGREGATOR` at a
-testnet aggregator. `lib/attest/walrus.ts` does a plain `PUT {publisher}/v1/blobs` and reads
-the blob ID out of either `newlyCreated.blobObject.blobId` or `alreadyCertified.blobId`.
+testnet aggregator. `lib/attest/walrus.ts` does a
+`PUT {publisher}/v1/blobs?epochs=<n>&permanent=true` and reads the blob ID out of either
+`newlyCreated.blobObject.blobId` or `alreadyCertified.blobId`.
+
+Two flags on that URL are not optional:
+
+- **`epochs`** comes from `WALRUS_EPOCHS`, defaulting to **53** — the testnet maximum, one
+  epoch being roughly a day. The publisher's own default is a *single* epoch, and that
+  silently destroyed traces: verdicts attested on 3–4 September had unreadable blobs by the
+  5th while their on-chain records survived, leaving a permanent receipt pointing at nothing.
+  Anything unset, non-integer or out of range falls back to the maximum, on purpose — a
+  misconfiguration should fail towards keeping data.
+- **`permanent=true`** makes Walrus store a non-deletable blob. Without it the trace behind a
+  verdict can be removed while the chain still points at it, which is exactly the promise
+  "a receipt nobody can edit" is not allowed to break.
 
 ### 5. AI + scanning keys
 
@@ -427,22 +491,52 @@ Every screen accepts `?lang=bm` or `?lang=zh`; English is the default and carrie
 
 ## Docker
 
-From `next/` (a `Makefile` wraps Compose):
+The stack is **three services**, defined in `docker-compose.yml` at the **repository root**
+(not in `next/`) and driven by the root `Makefile`:
+
+| Service | Role | Ports |
+|---|---|---|
+| `nextjs` | the app, `.next/standalone` server | internal `3400` only (`expose`, not `ports`) |
+| `nginx` | TLS terminator and the only thing bound to the host | host `80` → `80`, host `8443` → `443`; plain HTTP is 301'd to HTTPS unless it arrived through the tunnel (`X-Forwarded-Proto`) |
+| `ngrok` | public tunnel, compose profile `tunnel` — never started by `make up` | — |
+
+Run everything from the **repo root**:
 
 ```bash
-make up        # build + start in the background, http://localhost:3400
-make logs      # follow logs
-make ps        # service status
-make sh        # shell into the running container
-make down      # stop and remove
-make clean     # also drop volumes and dangling images
+make all        # or `make up` — issue certs, build, start → https://localhost:8443/
+make certs      # issue the local TLS cert only (idempotent; mkcert, else openssl)
+make logs       # follow logs from all services
+make ps         # service status
+make sh         # shell into the running nextjs container
+make clean      # or `make down` — stop and remove containers + network
+make fclean     # clean + drop this project's images, volumes and dangling layers
+make re         # fclean + all, full rebuild
+make help       # print this list from the Makefile itself
 ```
 
-The image is a three-stage build (`deps` → `builder` → `runner`) producing a
+### Exposing it publicly (ngrok)
+
+```bash
+make tunnel      # start the stack + the ngrok profile, then print the public URL
+make tunnel-url  # print the current URL and curl its /api/health
+make tunnel-down # stop the tunnel, leave the stack running
+```
+
+`make tunnel` requires `NGROK` (the authtoken) in `.env`. Set `NGROK_DOMAIN` to
+a reserved domain as well — without it every restart gets a random hostname, and both Google
+OAuth and Enoki allowlist an exact origin, so sign-in breaks. While `NGROK_DOMAIN` is set it
+**overrides `NEXT_PUBLIC_SITE_URL`** for share links, QR text and OG images
+(`lib/site-url.ts`); it is read at runtime, so a new domain needs a container restart, not a
+rebuild. `next.config.ts` also allowlists `*.ngrok-free.dev` / `*.ngrok-free.app` as dev
+origins, which matters only under `next dev`.
+
+The `nextjs` image is a three-stage build (`deps` → `builder` → `runner`) producing a
 `.next/standalone` server that runs as a non-root user, with a healthcheck hitting
-`/api/health`. `NEXT_PUBLIC_*` values must arrive as **build args** (they are inlined into the
-client bundle); server-only secrets stay runtime-only via `env_file`. Adding a new
-`NEXT_PUBLIC_*` variable means touching **both** the `Dockerfile` and `docker-compose.yml`.
+`/api/health` on `127.0.0.1`. Compose reads the single root `.env` — as `--env-file` for the
+build args and as `env_file` for the container environment. `NEXT_PUBLIC_*` values must
+arrive as **build args** (they are inlined into the client bundle); server-only secrets stay
+runtime-only via `env_file`. Adding a new `NEXT_PUBLIC_*` variable means touching **all
+three** of `next/Dockerfile`, `docker-compose.yml` and `.env.example`.
 
 ---
 
@@ -458,13 +552,17 @@ client bundle); server-only secrets stay runtime-only via `env_file`. Adding a n
 | 06 | `/confirm` | The only explicit consent moment before an on-chain write |
 | 07 | `/loading` | Writing on-chain |
 | 08 | `/failed` | Attestation error |
-| 09–13 | `/result/{false,true,disputed,unverifiable,insufficient}` | The five verdict states |
-| 14 | `/login` | Standalone Google sign-in |
-| 15 | `/card/[objectId]` | Shareable rebuttal card |
-| 16 | `/v/[objectId]` | Public record — no login wall |
+| 09–16 | `/result/{false,likely_false,partially_true,likely_true,true,disputed,unverifiable,insufficient}` | The eight verdict states |
+| 17 | `/result/link` | Link-scan result (VirusTotal rating — a separate screen, not a verdict state) |
+| 18 | `/login` | Standalone Google sign-in |
+| 19 | `/card/[objectId]` | Shareable rebuttal card |
+| 20 | `/v/[objectId]` | Public record — no login wall |
 
-`/result/[state]` enumerates its five segments with `generateStaticParams` and
-`dynamicParams = false`, so `/result/banana` is a genuine 404 **with a 404 status code**.
+`/result/[state]` enumerates its eight segments from `VERDICT_STATES` in `lib/fixtures.ts`
+with `generateStaticParams` and `dynamicParams = false`, so `/result/banana` is a genuine 404
+**with a 404 status code**. Five of the eight are *scored* states
+(`false → true`, banded by `bucketStateFromScore()`); `disputed`, `unverifiable` and
+`insufficient` carry no score by design.
 
 Screens 01–13 share the `app/(check)` route group, whose layout is not remounted between
 children — the claim text, verdict and pending transaction live in a context there. Opening a
@@ -483,14 +581,17 @@ whole flow.
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | `POST` | `/api/verify-claim` | none | Multi-model text fact-check → aggregated verdict |
-| `POST` | `/api/verify-image` | none | Multi-model image fact-check (Gemini vision) |
+| `POST` | `/api/verify-image` | none | Image authenticity check — body `{ imageBase64, language }`, two Gemini vision models |
 | `POST` | `/api/scan-link` | none | VirusTotal URL reputation → safety rating |
 | `POST` | `/api/ocr` | none | Screenshot → text (eng · msa · chi_sim) |
-| `POST` | `/api/verdict` | none | Verdict endpoint the UI calls today (see Known gaps) |
-| `POST` | `/api/attest` | none¹ | PII-redact the trace, upload to Walrus, return `create_verdict` args — **3 req/min/IP** |
+| `POST` | `/api/verdict` | none | What `flow.tsx` calls — body `{ text, language }`; wraps `getClaimVerdict()` and reshapes it into the locale-aware `{ state, score, description, flags, models, modelCount }` the UI renders |
+| `POST` | `/api/sum-and-refute` | none | Turns a final verdict into the plain-language summary + rebuttal shown on the result page and card (Gonka models first, one Gemini as backup; `maxDuration` 120s) |
+| `POST` | `/api/attest` | none¹ | Body `{ lang, result, claim }` — PII-redact the trace **and the claim text**, upload to Walrus, return `create_verdict` args — **3 req/min/IP** |
 | `POST` | `/api/sponsor` | none¹ | Build a sponsored transaction — **3 req/min/IP** |
 | `POST` | `/api/sponsor/execute` | none¹ | Submit the user's signature and execute |
+| `GET` | `/api/card/[objectId]` | none | Open Graph image for a verdict — a 1080×1080 PNG rendered by `next/og`, with a glyph-subset font so 中文 fits under the 500KB bundle cap. Accepts `?lang=` |
 | `GET` | `/api/health` | none | Configuration self-check; `200` if everything passes, `503` otherwise |
+| `GET` | `/api/testing` | none | Dev-only scratch route that fires the other endpoints against the fixtures in `test_inputs.ts` / `test_images.ts` / `test_links.ts` / `test_verdicts.ts`. Not part of the product surface |
 
 ¹ The zkLogin JWT/nonce check specified in the TRD is not yet implemented on `/api/attest` —
 rate limiting is the only guard today. See [Known gaps](#project-status--known-gaps).
@@ -642,8 +743,12 @@ A clean link looks like this:
 ### `POST /api/attest`
 
 ```jsonc
-// request — the verdict object from the check step
-{ "lang": "zh", "result": { "state": "false", "score": 25, "models": [ /* … */ ] } }
+// request — the verdict object from the check step, plus the message that was checked
+{
+  "lang": "zh",
+  "result": { "state": "false", "score": 25, "models": [ /* … */ ] },
+  "claim": "URGENT!! Government announced RM3000 for all Malaysians…"
+}
 
 // 200 — exactly the arguments create_verdict needs
 {
@@ -661,7 +766,12 @@ A clean link looks like this:
 ```
 
 Before upload, `lib/attest/redact.ts` strips Malaysian phone numbers, IC numbers and email
-addresses from the trace. Rate-limited and failure-honest:
+addresses from the whole blob. **The blob also carries the claim text itself** (capped at
+2000 characters) — a verdict identified only by a hash is unreadable to the person it gets
+forwarded to. That text is public and permanent, which is why the sign-in screen says so
+before consent: *"your message is published alongside the result, so anyone with the link can
+see what was checked."* The chain still stores only the hash. Rate-limited and
+failure-honest:
 
 ```jsonc
 // 429
@@ -704,7 +814,8 @@ The object ID **is** the permalink. Three independent ways to check the same rec
 | `<walrus-aggregator>/v1/blobs/kA5f2Yb3…` | the full, PII-redacted reasoning trace |
 
 Anyone holding the original message can compute `sha256(normalize(text) || lang)` and compare
-it to `claimHash` themselves — the raw text is never stored anywhere.
+it to `claimHash` themselves — **the chain stores only the hash**. The readable claim lives in
+the Walrus blob instead, PII-redacted and published with the user's explicit consent.
 
 ### `GET /api/health`
 
@@ -798,7 +909,8 @@ page **and on the shared card**, so the caveat survives being forwarded.
 
 ```bash
 cd next
-npm run test        # Vitest — includes app/(check)/flow.spec.tsx and app/api/sponsor/route.spec.ts
+npm run test        # Vitest — 4 suites: app/(check)/flow.spec.tsx, app/api/sponsor/route.spec.ts,
+                    #                    lib/attest/walrus.spec.ts, lib/card.spec.ts
 npm run typecheck   # tsc --noEmit
 npm run lint        # oxlint
 
@@ -826,7 +938,7 @@ grep 'published-at' Published.toml   # ← new PACKAGE_ID
 sui client verify-source             # confirm on-chain bytecode matches source
 ```
 
-Then update `next/.env` → `NEXT_PUBLIC_PACKAGE_ID`, **restart the dev server** (that value is
+Then update `.env` → `NEXT_PUBLIC_PACKAGE_ID`, **rebuild** (`make re` — that value is
 inlined at build time), and confirm with `curl -k https://localhost:3400/api/health` — the
 `movePackage` check prints the exact allowlist string it derived.
 
@@ -837,18 +949,40 @@ inlined at build time), and confirm with `curl -k https://localhost:3400/api/hea
 
 ## Project status & known gaps
 
-This is a hackathon build. What's honestly not finished:
+**As of 2026-09-05 the full path works end to end on testnet:** paste / link / screenshot →
+five live models through GonkaRouter and Gemini → aggregated verdict in EN, BM or 中文 →
+Google sign-in via zkLogin → explicit consent → PII-redacted trace on Walrus → sponsored
+`create_verdict` on Sui → a public `/v/[objectId]` page and a forwardable card, both reading
+back off the chain. Nothing in that sentence is mocked any more.
+
+| Area | Status |
+|---|---|
+| Check flow (text · link · photo) | Live — `/api/verdict`, `/api/scan-link`, `/api/ocr` + `/api/verify-image` |
+| Multi-model aggregation | Live — 5 models, weighted, refuses to score below 3 significant verdicts |
+| EN / BM / 中文 | Live — UI and model output |
+| zkLogin + sponsored write | Live on testnet, package `0x9c2a…7344` |
+| Public record `/v` + card `/card` | Live — gRPC read, BCS decode, Walrus trace, `next/og` image |
+| Containerised run + public tunnel | Live — `make up`, `make tunnel` |
+| Challenging a verdict | Move side only — no UI |
+
+What's honestly not finished:
 
 | Gap | Detail |
 |---|---|
-| `openai` is not in `package.json` | `/api/verify-claim` and `/api/verify-image` import it. Run `npm install openai` or those routes fail at build |
-| `/api/scan-link` imports a missing file | `import * as tests from "./test-links.ts"` has no matching file; the import is unused and should be deleted |
-| The UI is not yet on the real checker | `app/(check)/flow.tsx` calls `/api/verdict`, which returns locale-aware mock responses keyed by trigger words (`true`, `dispute`, `unverif`, `insuff`, …). Wiring it to `/api/verify-claim` is the remaining connection |
 | `/api/attest` does not verify the zkLogin JWT | The TRD calls for a JWT/nonce binding check here. Today only IP rate limiting guards it |
-| `create_verdict` has no capability gate | Anyone can call it directly with fabricated fields. Documented in `registry.move` as a real design question, deliberately not decided silently |
-| `/card` and `/v` may fall back to fixtures | The Sui fullnode read by object ID is still marked TODO in parts of those pages |
+| `create_verdict` has no capability gate | Anyone can call it directly with fabricated fields. Documented in `registry.move:85` as a real design question, deliberately not decided silently |
+| No `Challenge` submission UI | `registry::challenge` exists and is tested, and `/v/[objectId]` displays `challengeCount`, but there is no screen to submit one |
 | Verdict caching is not implemented | The TRD specifies claim-hash caching to protect the AI credit budget; not yet built |
-| No `Challenge` submission UI | The Move function exists and is tested; the frontend entry point is roadmap |
+| `/api/testing` is a dev scratch route | Hardcodes `https://localhost:3400` and toggles test paths by commenting blocks in and out. Harmless but should not ship |
+| Unused variables in `.env.example` | `PUBLIC_BASE64KEY`, `PEERID` and `CHATGPT_API_KEY` are declared but read nowhere in `app/` or `lib/` — the OpenAI client block in `verify-claim/route.ts` is commented out |
+| Non-Docker runs have no env file | Moving to a single root `.env` left `next dev` and `next/scripts/my-blobs.cjs` pointing at `next/.env`, which is gone. Symlink it (`ln -s ../.env next/.env`) until the loader is changed |
+
+Fixed since the last revision of this file, kept here because earlier drafts of the docs
+still mention them: `openai` is now in `package.json` (`^7.10.0`); the missing
+`./test-links.ts` import is gone from `/api/scan-link`; `/api/verdict` now calls the real
+`getClaimVerdict()` from `/api/verify-claim` instead of returning trigger-word mocks; and
+`/v/[objectId]` and `/card/[objectId]` read the chain for real via `fetchOnChainVerdict()`,
+404-ing when the object does not exist rather than falling back to fixtures.
 
 ---
 
@@ -858,9 +992,13 @@ This is a hackathon build. What's honestly not finished:
   Konfirm performs **no value transfer** and therefore sits outside BNM / SC licensing scope.
 - **No raw claim text is ever stored on-chain.** Only `sha256(normalize(text) || lang)` — 32
   bytes, not reversible. Anyone with the original message can recompute and compare it.
-- **PII redaction before Walrus.** Reasoning traces pass through `lib/attest/redact.ts`,
-  which strips Malaysian phone numbers, IC numbers and emails — because a Walrus blob, like a
-  chain write, cannot be taken back (PDPA 2010).
+- **The claim text *is* in the Walrus blob**, and that is deliberate: a record nobody can read
+  cannot be forwarded back into the group chat, which is the whole point of the product. It is
+  PII-redacted, capped at 2000 characters, and the user is told in plain language on the
+  sign-in screen — before consent — that their message will be published alongside the result.
+- **PII redaction before Walrus.** The whole trace, claim text included, passes through
+  `lib/attest/redact.ts`, which strips Malaysian phone numbers, IC numbers and emails —
+  because a Walrus blob, like a chain write, cannot be taken back (PDPA 2010).
 - **Secrets stay server-side.** `ENOKI_SECRET_KEY`, `GONKA_ROUTER_API_KEY`, `GEMINI_API_KEY`,
   `VIRUSTOTAL_API_KEY` and `WALRUS_PUBLISHER` are never prefixed `NEXT_PUBLIC_` and never
   reach the client bundle. `.env` is gitignored and excluded from the Docker image.
@@ -931,10 +1069,11 @@ This is a hackathon build. What's honestly not finished:
 | [`docs/Konfirm_TRD.md`](docs/Konfirm_TRD.md) | Architecture, data model, API design, risks, sequencing |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | arc42-style overview of the codebase |
 | [`docs/routes.md`](docs/routes.md) | Every screen, and why the flow is shaped this way |
-| [`docs/Enoki_setup.md`](docs/Enoki_setup.md) | zkLogin + sponsorship, including the six things that will trip you up |
-| [`docs/redeploy.md`](docs/redeploy.md) | Run this every time the Move package is republished |
-| [`docs/docker.md`](docs/docker.md) | The earlier nginx-fronted setup, kept for reference |
-| [`docs/history.md`](docs/history.md) | Decision log — what was tried, what was reverted, and why |
+| [`docs/docker.md`](docs/docker.md) | Write-up of the nginx-fronted setup from when it was still discarded — the stack it describes is now live, so read it as background, not as current status |
+| [`docs/Branching_rules.md`](docs/Branching_rules.md) | Branch structure and the rules for merging into `dev` / `main` |
+| [`docs/README.md`](docs/README.md) | Index of the pitch pack — Konfirm explained for someone new to blockchain who has to answer judges on stage |
+| [`docs/01-zklogin.md`](docs/01-zklogin.md) · [`02-walrus.md`](docs/02-walrus.md) · [`03-gas-fees.md`](docs/03-gas-fees.md) | Sign-in without a wallet, blob storage, and who pays the network fee |
+| [`docs/04-data-and-sharing.md`](docs/04-data-and-sharing.md) · [`05-diagrams.md`](docs/05-diagrams.md) · [`06-qna-cheatsheet.md`](docs/06-qna-cheatsheet.md) | What gets published, the diagrams to draw on a whiteboard, and the judges' Q&A cheat-sheet |
 
 ---
 
