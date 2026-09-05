@@ -20,7 +20,7 @@
     "loadingLink": "Mengimbas dengan VirusTotal...",
     "loadingLinkSub": "Ini boleh mengambil masa sehingga seminit",
     "gateTitle": "Satu langkah lagi untuk lihat keputusan",
-    "gateBody": "Keputusan anda sudah siap. Log masuk supaya kami boleh rekodkan atas rangkaian atas nama anda — kami tidak simpan mesej itu, hanya cap jarinya. Tiada akaun baharu, tiada kata laluan.",
+    "gateBody": "Keputusan anda sudah sedia. Log masuk supaya kami boleh menulisnya atas rantaian di bawah nama anda — mesej anda diterbitkan bersama keputusan, jadi sesiapa yang ada pautan boleh melihat apa yang disemak. Tiada akaun untuk dibuka, tiada kata laluan.",
     "google": "Teruskan dengan Google",
     "confirmTitle": "Sedia untuk rekod atas rangkaian?",
     "confirmBody": "Ini mencipta rekod awam yang kekal dan boleh disemak sesiapa. Ia tidak boleh diubah atau dihapus kemudian. Ia percuma — kami bayar fi rangkaian untuk anda.",
@@ -90,6 +90,20 @@
     "signOut": "Log keluar",
     "signedInAs": "Log masuk sebagai",
     "claimFingerprint": "Cap jari dakwaan",
-    "traceUnavailable": "Jejak penaakulan penuh tidak dapat dimuatkan buat masa ini. Rekod atas rantaian di bawah tidak terjejas."
+    "claimChecked": "Apa yang anda semak",
+    "traceUnavailable": "Jejak penaakulan penuh tidak dapat dimuatkan buat masa ini. Rekod atas rantaian di bawah tidak terjejas.",
+    "historyNav": "Sejarah",
+    "historyTitle": "Semakan anda",
+    "historySub": "Setiap keputusan yang anda simpan atas rantaian dengan akaun ini.",
+    "historySignedOut": "Log masuk untuk melihat semakan yang anda buat.",
+    "historyEmpty": "Anda belum menyimpan sebarang keputusan atas rantaian.",
+    "historyLoading": "Membaca rantaian...",
+    "historyOffline": "Tidak dapat menghubungi rantaian — memaparkan apa yang peranti ini ingat.",
+    "historyPending": "Belum disahkan atas rantaian",
+    "historyBlob": "Blob jejak",
+    "historyCopy": "Salin",
+    "historyCopied": "Disalin",
+    "historyView": "Lihat rekod",
+    "historyChallenges": "{count} dicabar"
   }
 }

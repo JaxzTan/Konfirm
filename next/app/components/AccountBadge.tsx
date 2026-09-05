@@ -1,10 +1,13 @@
 'use client';
 
+import Link from 'next/link';
+
 import { shortenAddress, useKonfirmIdentity } from '@/lib/signer';
 
 export type AccountBadgeLabels = {
   signedInAs: string;
   signOut: string;
+  history: string;
 };
 
 /**
@@ -18,9 +21,12 @@ export type AccountBadgeLabels = {
  */
 export function AccountBadge({
   labels,
+  historyHref,
   className,
 }: {
   labels: AccountBadgeLabels;
+  /** Carries the caller's `?lang=`, which this component has no view of. */
+  historyHref: string;
   className?: string;
 }) {
   const { address, signOut, isSigningOut } = useKonfirmIdentity();
@@ -38,6 +44,9 @@ export function AccountBadge({
           {shortenAddress(address)}
         </span>
       </span>
+      <Link href={historyHref} className="underline opacity-70 hover:opacity-100">
+        {labels.history}
+      </Link>
       <button
         type="button"
         onClick={signOut}

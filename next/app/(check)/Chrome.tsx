@@ -81,7 +81,12 @@ export function Chrome() {
             address text never competes for width with the logo or the
             language selector. */}
         <AccountBadge
-          labels={{ signedInAs: t("signedInAs"), signOut: t("signOut") }}
+          labels={{
+            signedInAs: t("signedInAs"),
+            signOut: t("signOut"),
+            history: t("historyNav"),
+          }}
+          historyHref={href("/history")}
           className="mt-2 flex items-center justify-end gap-2 text-[12px] text-[#9ca3af]"
         />
       </header>

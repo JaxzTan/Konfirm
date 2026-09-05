@@ -28,8 +28,10 @@ type Verdict = {
   score: number | null;
   /** Empty when the Walrus trace couldn't be read — the chain has no prose. */
   description: string;
-  /** sha256(normalize(text) || lang). The claim text itself is stored nowhere. */
+  /** sha256(normalize(text) || lang) — the chain's own identifier for the claim. */
   claimHashHex: string;
+  /** The message that was checked, from the Walrus trace. Empty when the blob is unreadable. */
+  claim: string;
   modelCount: number;
   flags: string[];
   models: ModelResult[];
@@ -98,6 +100,7 @@ async function getVerdict(objectId: string): Promise<Verdict | null> {
     score: onChain.score,
     description: typeof trace?.description === "string" ? trace.description : "",
     claimHashHex: onChain.claimHashHex,
+    claim: typeof trace?.claim === "string" ? trace.claim : "",
     modelCount: onChain.modelCount,
     flags: Array.isArray(trace?.flags) ? (trace.flags as string[]) : [],
     // Driven by the on-chain models list, not the trace's: the chain is the
@@ -162,8 +165,20 @@ export default async function VerifyPage({
       </header>
 
       <div className="grid gap-4 bg-gradient-to-b from-[#0f2e23] to-[#1f4d3d] px-5 py-[22px]">
-        {/* The claim text is stored nowhere — only its hash goes on chain, so
-            the fingerprint is all there is to identify what was checked. */}
+        {/* What was checked, then how it is identified on chain. The claim
+            comes from the Walrus trace and can be missing when the blob is
+            unreadable; the hash comes from the chain and always is. */}
+        {verdict.claim && (
+          <div className="grid gap-[6px]">
+            <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[#9ca3af]">
+              {t("claimChecked")}
+            </p>
+            <p className="whitespace-pre-wrap text-[13.5px] leading-[1.55] text-[#f7f5ef]">
+              {verdict.claim}
+            </p>
+          </div>
+        )}
+
         <div className="grid gap-[6px]">
           <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[#9ca3af]">
             {t("claimFingerprint")}

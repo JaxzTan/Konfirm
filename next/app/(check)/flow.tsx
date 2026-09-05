@@ -8,6 +8,8 @@ import { Transaction } from "@mysten/sui/transactions";
 import { useKonfirmIdentity } from "@/lib/signer";
 import { useSignAndExecuteTransaction } from "@/lib/sui/useSignAndExecuteTransaction";
 import { computeClaimHash } from "@/lib/attest/claimHash";
+import { rememberVerdict } from "@/lib/history/cache";
+import { NO_SCORE } from "@/lib/sui/verdict";
 import { messagesByLocale, TIME_ZONE, type Locale } from "@/lib/locale";
 import { localizeVerdict, verdictFromApi, type Verdict } from "@/lib/fixtures";
 
@@ -113,7 +115,7 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
   const pathMode = modeFromPath(usePathname());
   const [checkMode, setCheckMode] = useState<Mode | null>(null);
   const mode = checkMode ?? pathMode;
-  const { isSignedIn } = useKonfirmIdentity();
+  const { isSignedIn, address } = useKonfirmIdentity();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
   const [text, setText] = useState("");
@@ -238,7 +240,7 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
       const attestResponse = await fetch("/api/attest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lang: locale, result: verdict }),
+        body: JSON.stringify({ lang: locale, result: verdict, claim: text }),
       });
       // Parse defensively: a 500 can come back as an HTML error page, and a
       // raw SyntaxError here would bury the status code that explains it.
@@ -280,6 +282,21 @@ function Provider({ locale, children }: { locale: Locale; children: ReactNode })
       }
 
       setObjectId(created.objectId);
+
+      // Record it locally before navigating, so /history has something to
+      // show on this device the moment the user opens it. The chain is still
+      // the source of truth — this only saves the history page from waiting
+      // on a fullnode query that may not have indexed the verdict yet.
+      if (address) {
+        rememberVerdict(address, {
+          objectId: created.objectId,
+          traceBlob: args.traceBlob,
+          state: args.state,
+          score: args.score === NO_SCORE ? null : args.score,
+          savedAtMs: Date.now(),
+        });
+      }
+
       go(`/result/${verdict?.state ?? "false"}`);
     } catch (cause) {
       console.error("Attest failed:", cause);

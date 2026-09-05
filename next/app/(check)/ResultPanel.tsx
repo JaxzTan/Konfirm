@@ -40,7 +40,7 @@ const IMAGE_VERDICT_TONE: Record<string, "t" | "f"> = {
 
 export function ResultPanel() {
   const t = useTranslations("App");
-  const { locale, text, verdict, imageCheck, objectId, reset, check, href } = useFlow();
+  const { locale, verdict, text, imageCheck, objectId, reset, check, href } = useFlow();
   const router = useRouter();
   const [refutation, setRefutation] = useState<{ summaryFlags: string[]; politeRefutation: string } | null>(null);
   const [refutationLoading, setRefutationLoading] = useState(false);
@@ -107,6 +107,19 @@ export function ResultPanel() {
 
   const head = (
     <>
+      {/* What was checked, shown above the verdict — the result is unreadable
+          later, and unshareable now, without the claim it belongs to. */}
+      {text.trim() && (
+        <div className="grid gap-[6px]">
+          <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-[#9ca3af]">
+            {t("claimChecked")}
+          </p>
+          <p className="line-clamp-4 whitespace-pre-wrap text-[13.5px] leading-[1.55] text-[#f7f5ef]">
+            {text}
+          </p>
+        </div>
+      )}
+
       {scored ? (
         <>
           <div className="flex items-center gap-4">

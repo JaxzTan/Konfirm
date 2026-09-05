@@ -85,7 +85,7 @@ CMD ["node", "server.js"]
 Notes:
 - 3-stage build (`deps` → `builder` → `runner`) keeps `node_modules`/build tooling out of the final image.
 - Runs as non-root `nextjs` user.
-- Any new `NEXT_PUBLIC_*` env var added to the app needs a matching `ARG`/`ENV` line here **and** an entry in `docker-compose.yml`'s `build.args` — server-only secrets (`ENOKI_SECRET_KEY`, `SUI_ATTESTER_SECRET`, `DATABASE_URL`, etc.) do NOT go here, they're runtime-only via `env_file` in compose.
+- Any new `NEXT_PUBLIC_*` env var added to the app needs a matching `ARG`/`ENV` line here **and** an entry in `docker-compose.yml`'s `build.args` — server-only secrets (`ENOKI_SECRET_KEY`, `GONKA_ROUTER_API_KEY`, `DATABASE_URL`, etc.) do NOT go here, they're runtime-only via `env_file` in compose.
 
 ### `nginx/Dockerfile`
 

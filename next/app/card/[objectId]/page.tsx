@@ -17,6 +17,9 @@ type Card = {
   /** Real per-verdict description from the Walrus trace, or null when the
    *  trace is unreadable — falls back to the generic string-table copy. */
   description: string | null;
+  /** The message that was checked, from the same trace. Empty when the blob
+   *  is unreadable, or when the record predates claims being archived. */
+  claim: string;
 };
 
 /** Reads the real on-chain Verdict — same source /v/[objectId] uses. */
@@ -40,6 +43,7 @@ async function getCard(objectId: string): Promise<Card | null> {
     state,
     modelCount: onChain.modelCount,
     description: typeof trace?.description === "string" ? trace.description : null,
+    claim: typeof trace?.claim === "string" ? trace.claim : "",
   };
 }
 
@@ -83,6 +87,19 @@ export default async function CardPage({
     <div className="grid flex-1 content-center gap-[18px] bg-[#f7f5ef] px-5 py-[26px]">
       <div className="grid gap-4 rounded-[26px] bg-gradient-to-b from-[#0f2e23] to-[#0b241b] px-6 py-[26px]">
         <p className="font-serif text-[18px] text-[#f7f5ef]">Konfirm</p>
+
+        {/* The claim first: a shared card that only says "false" without
+            saying false about what is not worth screenshotting. */}
+        {card.claim && (
+          <div className="grid gap-[5px]">
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#9ca3af]">
+              {t("claimChecked")}
+            </p>
+            <p className="line-clamp-3 text-[13.5px] leading-[1.5] text-[#f7f5ef]/85">
+              {card.claim}
+            </p>
+          </div>
+        )}
 
         <h1
           className={`text-[34px] leading-[1.2] ${heading} ${

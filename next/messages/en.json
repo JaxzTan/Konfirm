@@ -20,7 +20,7 @@
     "loadingLink": "Scanning with VirusTotal...",
     "loadingLinkSub": "This can take up to a minute",
     "gateTitle": "One more step to see your result",
-    "gateBody": "Your result is ready. Sign in so we can write it on-chain under your name — we never store the message itself, only a hash of it. No account to create, no password.",
+    "gateBody": "Your result is ready. Sign in so we can write it on-chain under your name — your message is published alongside the result, so anyone with the link can see what was checked. No account to create, no password.",
     "google": "Continue with Google",
     "confirmTitle": "Ready to post this on-chain?",
     "confirmBody": "This creates a permanent public record anyone can check. It cannot be edited or deleted later. It is free — we pay the network fee for you.",
@@ -90,6 +90,20 @@
     "signOut": "Sign out",
     "signedInAs": "Signed in as",
     "claimFingerprint": "Claim fingerprint",
-    "traceUnavailable": "The full reasoning trace could not be loaded right now. The on-chain record below is unaffected."
+    "claimChecked": "What you asked",
+    "traceUnavailable": "The full reasoning trace could not be loaded right now. The on-chain record below is unaffected.",
+    "historyNav": "History",
+    "historyTitle": "Your checks",
+    "historySub": "Every result you posted on-chain with this account.",
+    "historySignedOut": "Sign in to see the checks you have made.",
+    "historyEmpty": "You have not posted any results on-chain yet.",
+    "historyLoading": "Reading the chain...",
+    "historyOffline": "Could not reach the chain — showing what this device remembers.",
+    "historyPending": "Not confirmed on-chain yet",
+    "historyBlob": "Trace blob",
+    "historyCopy": "Copy",
+    "historyCopied": "Copied",
+    "historyView": "View record",
+    "historyChallenges": "{count} challenged"
   }
 }

@@ -295,7 +295,6 @@ cp .env.example .env
 | `GONKA_ROUTER_API_KEY` | **server only** | yes | GonkaRouter key (`https://api.gonkarouter.io/v1`) |
 | `GEMINI_API_KEY` | **server only** | yes | Google AI Studio key, used for the image path |
 | `VIRUSTOTAL_API_KEY` | **server only** | yes | VirusTotal v3 key for `/api/scan-link` |
-| `SUI_ATTESTER_SECRET` | **server only** | fallback | `suiprivkey1…` — only used if the zkLogin path is bypassed |
 | `NEXT_PUBLIC_SITE_URL` | browser | no | canonical origin, used for share links |
 
 > **`NEXT_PUBLIC_*` variables are inlined at build time.** Changing one means restarting
