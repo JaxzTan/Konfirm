@@ -9,6 +9,11 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  // Dev-only: lets an ngrok tunnel's HMR/dev-resource requests through.
+  // ngrok's free plan gives a new random subdomain each restart, so this
+  // is a wildcard rather than one fixed hostname — remove once the app is
+  // actually deployed, since this setting has no effect outside `next dev`.
+  allowedDevOrigins: ["*.ngrok-free.dev", "*.ngrok-free.app"],
 };
 
 export default nextConfig;

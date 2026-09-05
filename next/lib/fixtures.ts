@@ -16,7 +16,7 @@ export const VERDICT_STATES = [
  *  own buckets (finalTrustScore < 12.5/37.5/62.5/87.5) — kept together so a
  *  raw score can be bucketed the same way everywhere it needs to (see
  *  bucketStateFromScore()). */
-const SCORED_STATES = ["false", "likely_false", "partially_true", "likely_true", "true"] as const;
+export const SCORED_STATES = ["false", "likely_false", "partially_true", "likely_true", "true"] as const;
 
 /** Mirrors aggregate.ts's own bucket boundaries — used wherever a raw 0-100
  *  score needs to become one of the 5 scored states, without re-deriving a

@@ -46,6 +46,16 @@ describe('getCard', () => {
     expect((await getCard(OBJECT_ID))!.state).toBe('false');
   });
 
+  it('reports "unclear" — not "false" — when the trace state is itself unverifiable', async () => {
+    // A real bug: "unverifiable" is a valid, non-null VerdictState, so a
+    // check that only special-cased `resolved === null` let it fall through
+    // into the true/false binary and show "false" for a claim the models
+    // never actually judged at all.
+    fetchOnChainVerdict.mockResolvedValue(onChain({ score: null }));
+    fetchTrace.mockResolvedValue({ state: 'unverifiable' });
+    expect((await getCard(OBJECT_ID))!.state).toBe('unclear');
+  });
+
   it('falls back to score >= 50 when the trace has no usable state', async () => {
     fetchOnChainVerdict.mockResolvedValue(onChain({ score: 80 }));
     expect((await getCard(OBJECT_ID))!.state).toBe('true');
