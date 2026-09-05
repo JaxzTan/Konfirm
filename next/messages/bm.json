@@ -49,6 +49,7 @@
     "oneModel": "Hanya 1 model menyertai",
     "mKeySignals": "Isyarat utama",
     "mModels": "Apa setiap model dapati",
+    "mSummary": "Ringkasan",
     "mPositions": "Dua pendirian",
     "mFound": "Apa yang kami dapati",
     "mChain": "Rekod atas rangkaian",
@@ -65,8 +66,6 @@
     "mImageCheckNote": "Bukan keputusan dakwaan — isyarat berasingan sama ada foto ini kelihatan tulen atau telah disunting.",
     "sideFalse": "Nampak palsu",
     "sideTrue": "Nampak benar",
-    "posFalse": "Angka itu benar tetapi dinyatakan sebagai polisi 2026 yang belum diumumkan — mengelirukan bila disebarkan.",
-    "posTrue": "Angkanya sepadan dengan dokumen bajet; mesej ini buruk susunannya, bukan palsu.",
     "unvTitle": "Tidak cukup untuk dinilai",
     "unvBody": "Ketiadaan bukti bukan bukti ia palsu. Berhati-hati dan minta sumber asal.",
     "insTitle": "Cuba semak semula",
@@ -86,27 +85,6 @@
     "explorer": "Lihat rekod ini di Sui Explorer ↗",
     "immutable": "Rekod ini tidak boleh diubah atau dihapus.",
     "claim": "PENTING! Maklumat dalaman KKM: minum air lemon bercampur soda bikarbonat pada perut kosong boleh membunuh sel kanser. Hospital tidak akan beritahu anda! Sebarkan segera!!!",
-    "signalsFalse": [
-      "Tiada sumber dinyatakan",
-      "Tiada tarikh",
-      "Mendesak sebarkan segera",
-      "Dakwa pihak berkuasa menyembunyi"
-    ],
-    "signalsTrue": [
-      "Sumber kementerian dinyatakan",
-      "Bertarikh 14 Ogos 2026",
-      "Angka sepadan dokumen bajet"
-    ],
-    "reasonFalse": [
-      "Dakwaan ubat alkali untuk kanser telah dinilai dan ditolak; tiada pekeliling KKM.",
-      "Mekanismenya bukan mustahil, tetapi lonjakan ke 'bunuh sel kanser' tiada sokongan.",
-      "Sepadan dengan mesej berantai sejak 2019, termasuk dakwaan penyembunyian."
-    ],
-    "reasonTrue": [
-      "Angka peruntukan sepadan dengan butiran bajet 2026 yang diterbitkan.",
-      "Siaran akhbar mengesahkan jumlah dan tarikh berkuat kuasa.",
-      "Ayatnya hampir sama dengan pernyataan rasmi; tiada penyelewengan."
-    ],
     "copied": "Disalin!",
     "signIn": "Log masuk",
     "signOut": "Log keluar",

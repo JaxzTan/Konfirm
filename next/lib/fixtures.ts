@@ -45,10 +45,10 @@ type ApiVerdict = {
   verdict?: string;
   description?: string;
   flags?: string[];
-  models?: { name: string; score: number; reasoning: string; requestId: string }[];
+  models?: { name: string; score: number; reasoning: string[]; requestId: string }[];
   modelCount?: number;
   positions?: { stance: string; models: string[]; reasoning: string }[];
-  respondedModel?: { name: string; score: number; reasoning: string; requestId: string };
+  respondedModel?: { name: string; score: number; reasoning: string[]; requestId: string };
 };
 
 /**
