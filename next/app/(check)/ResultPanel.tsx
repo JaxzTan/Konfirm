@@ -44,6 +44,18 @@ export function ResultPanel() {
   const router = useRouter();
   const [refutation, setRefutation] = useState<{ summaryFlags: string[]; politeRefutation: string } | null>(null);
   const [refutationLoading, setRefutationLoading] = useState(false);
+  const [copiedRefutation, setCopiedRefutation] = useState(false);
+
+  const handleCopyRefutation = async () => {
+    if (!refutation) return;
+    try {
+      await navigator.clipboard.writeText(refutation.politeRefutation);
+      setCopiedRefutation(true);
+      setTimeout(() => setCopiedRefutation(false), 2000);
+    } catch {
+      // clipboard unavailable — the text is still selectable/copyable by hand
+    }
+  };
 
   useEffect(() => {
     if (!verdict) router.replace(href("/"));
@@ -53,6 +65,12 @@ export function ResultPanel() {
   // summary and a polite rebuttal message only make sense once there's an
   // actual verdict to summarize. Loaded after the verdict itself so the
   // main result never waits on this second, purely supplementary call.
+  //
+  // Depends on state/score, not the whole `verdict` object: localizeVerdict()
+  // (lib/fixtures.ts) returns a new Verdict object every time the UI
+  // language changes, even for the same check. Depending on `verdict` itself
+  // would re-fire this on every language toggle instead of once per real
+  // check — an unnecessary AI call each time.
   useEffect(() => {
     if (!verdict || verdict.score === null) return;
     setRefutationLoading(true);
@@ -81,7 +99,8 @@ export function ResultPanel() {
       })
       .catch((cause) => console.error("Summary/refutation failed:", cause))
       .finally(() => setRefutationLoading(false));
-  }, [verdict, text]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verdict?.state, verdict?.score, text]);
 
   if (!verdict) return <Spinner locale={locale} title={t("loading")} sub="" />;
 
@@ -121,7 +140,7 @@ export function ResultPanel() {
             </div>
           </div>
           <div className="rounded-[10px] bg-[#f7f5ef]/10 px-[13px] py-[10px] text-[12.5px] text-[#f7f5ef]">
-            {t("confidence")}
+            {t("confidence", { count: verdict.modelCount })}
           </div>
         </>
       ) : (
@@ -137,7 +156,7 @@ export function ResultPanel() {
 
       {verdict.state === "disputed" && (
         <div className="rounded-[10px] bg-[#f7f5ef]/10 px-[13px] py-[10px] text-[12.5px] text-[#f7f5ef]">
-          {t("noConsensus")}
+          {t("noConsensus", { count: verdict.modelCount })}
         </div>
       )}
 
@@ -149,15 +168,6 @@ export function ResultPanel() {
 
   return (
     <Panel head={head}>
-      {scored && (
-        <SignalsAndModels
-          labels={{ signals: t("mKeySignals"), models: t("mModels") }}
-          signals={verdict.signals}
-          tone={verdict.tone}
-          models={verdict.models}
-        />
-      )}
-
       {scored && (
         <div className="grid gap-[10px]">
           <Micro>{t("mSummary")}</Micro>
@@ -174,12 +184,30 @@ export function ResultPanel() {
                   <li key={i}>{f}</li>
                 ))}
               </ul>
-              <p className="rounded-xl bg-[#f7f5ef] p-[12px] text-[13.5px] leading-[1.55] text-[#0f2e23]">
-                {refutation.politeRefutation}
-              </p>
+              <div className="grid gap-[6px] rounded-xl bg-[#f7f5ef] p-[12px]">
+                <p className="text-[13.5px] leading-[1.55] text-[#0f2e23]">
+                  {refutation.politeRefutation}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCopyRefutation}
+                  className="justify-self-end text-[12px] font-semibold text-[#1f4d3d] hover:underline"
+                >
+                  {copiedRefutation ? t("copied") : t("copyRefutation")}
+                </button>
+              </div>
             </>
           ) : null}
         </div>
+      )}
+
+      {scored && (
+        <SignalsAndModels
+          labels={{ signals: t("mKeySignals"), models: t("mModels") }}
+          signals={verdict.signals}
+          tone={verdict.tone}
+          models={verdict.models}
+        />
       )}
 
       {imageCheck && imageCheck.claim_verdict && (
