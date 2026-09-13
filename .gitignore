@@ -15,3 +15,12 @@ AGENTS.md
 CLAUDE.md
 /history.md
 package-lock.json
+
+docs/Enoki_setup.md
+docs/README.md
+docs/ai_response.md
+docs/docker-wsl2.md
+docs/history.md
+docs/redeploy.md
+docs/routes.md
+docs/wallet.md

@@ -17,12 +17,23 @@ const { bcs } = require('@mysten/sui/bcs');
  * lets `SUI_WALLET=0x… node scripts/my-blobs.cjs` override it for one run.
  */
 function loadEnv() {
-  const file = path.join(__dirname, '..', '.env');
+  // next/.env first because that is what `next dev` reads, then the repo root,
+  // which is where docker-compose's env_file points and where the project
+  // consolidated its config. Neither existing is fine — the argument and the
+  // real environment remain.
+  const files = [
+    path.join(__dirname, '..', '.env'),
+    path.join(__dirname, '..', '..', '.env'),
+  ];
+  for (const file of files) loadEnvFile(file);
+}
+
+function loadEnvFile(file) {
   let text;
   try {
     text = fs.readFileSync(file, 'utf8');
   } catch {
-    return;   // no .env is fine — the argument and the real environment remain
+    return;
   }
   for (const line of text.split('\n')) {
     const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
@@ -97,7 +108,10 @@ async function print({ verdictId, tx }) {
   console.log(`${new Date(Number(v.createdAtMs)).toISOString()}  ${v.traceBlob}`);
   console.log(`    verdict ${verdictId}`);
   console.log(`    tx      ${tx}`);
-  console.log(`    read    curl -s ${AGG}/v1/blobs/${v.traceBlob} | jq .`);
+  // Both commands in full, ready to paste — this output is meant to be read
+  // off during a demo, so nothing here should need editing before it runs.
+  console.log(`    chain   sui client object ${verdictId} --json`);
+  console.log(`    trace   curl -s ${AGG}/v1/blobs/${v.traceBlob} | jq .`);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
